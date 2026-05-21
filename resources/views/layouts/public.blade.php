@@ -32,10 +32,11 @@
                         
                         <!-- Center Links -->
                         <div class="hidden md:flex items-center space-x-8">
-                            <a href="#" class="text-sm font-semibold text-gray-500 hover:text-brand-500 transition-colors">Product</a>
-                            <a href="#" class="text-sm font-semibold text-gray-500 hover:text-brand-500 transition-colors">Network</a>
-                            <a href="#" class="text-sm font-semibold text-gray-500 hover:text-brand-500 transition-colors">Pricing</a>
-                            <a href="#" class="text-sm font-semibold text-gray-500 hover:text-brand-500 transition-colors">Enterprise</a>
+                            <a href="/#features" class="text-sm font-semibold text-gray-500 hover:text-brand-500 transition-colors">Product</a>
+                            <a href="/#network" class="text-sm font-semibold text-gray-500 hover:text-brand-500 transition-colors">Network</a>
+                            <a href="/#pricing" class="text-sm font-semibold text-gray-500 hover:text-brand-500 transition-colors">Pricing</a>
+                            <a href="/about" class="text-sm font-semibold text-gray-500 hover:text-brand-500 transition-colors" wire:navigate>About</a>
+                            <a href="/contact" class="text-sm font-semibold text-gray-500 hover:text-brand-500 transition-colors" wire:navigate>Contact</a>
                         </div>
                     </div>
 
@@ -74,10 +75,11 @@
             <!-- Mobile Menu -->
             <div x-show="mobileMenuOpen" class="md:hidden bg-white border-b border-gray-100 absolute w-full left-0 top-full shadow-xl" x-cloak x-transition>
                 <div class="px-4 py-6 space-y-2 flex flex-col">
-                    <a href="#" class="block px-3 py-3 text-base font-semibold text-gray-900 rounded-lg hover:bg-gray-50">Product</a>
-                    <a href="#" class="block px-3 py-3 text-base font-semibold text-gray-900 rounded-lg hover:bg-gray-50">Network</a>
-                    <a href="#" class="block px-3 py-3 text-base font-semibold text-gray-900 rounded-lg hover:bg-gray-50">Pricing</a>
-                    <a href="#" class="block px-3 py-3 text-base font-semibold text-gray-900 rounded-lg hover:bg-gray-50">Enterprise</a>
+                    <a href="/#features" @click="mobileMenuOpen = false" class="block px-3 py-3 text-base font-semibold text-gray-900 rounded-lg hover:bg-gray-50">Product</a>
+                    <a href="/#network" @click="mobileMenuOpen = false" class="block px-3 py-3 text-base font-semibold text-gray-900 rounded-lg hover:bg-gray-50">Network</a>
+                    <a href="/#pricing" @click="mobileMenuOpen = false" class="block px-3 py-3 text-base font-semibold text-gray-900 rounded-lg hover:bg-gray-50">Pricing</a>
+                    <a href="/about" @click="mobileMenuOpen = false" class="block px-3 py-3 text-base font-semibold text-gray-900 rounded-lg hover:bg-gray-50" wire:navigate>About</a>
+                    <a href="/contact" @click="mobileMenuOpen = false" class="block px-3 py-3 text-base font-semibold text-gray-900 rounded-lg hover:bg-gray-50" wire:navigate>Contact</a>
                     <div class="border-t border-gray-100 pt-6 mt-4 flex flex-col gap-3">
                         @if (Route::has('login'))
                             @auth

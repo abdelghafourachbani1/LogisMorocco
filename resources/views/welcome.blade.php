@@ -77,7 +77,7 @@
     </div>
 
     <!-- ARCHITECTURE SECTION (Bento Grid) -->
-    <section class="py-24 bg-white relative">
+    <section id="features" class="py-24 bg-white relative">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="text-center max-w-3xl mx-auto mb-16">
                 <h2 class="text-3xl md:text-4xl font-black text-gray-900 tracking-tight mb-4">Powerful Logistics Architecture</h2>
@@ -144,7 +144,7 @@
     </section>
 
     <!-- HOW LOGIMOROCCO SCALES SECTION -->
-    <section class="py-24 bg-white border-t border-gray-100">
+    <section id="network" class="py-24 bg-white border-t border-gray-100">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex flex-col md:flex-row justify-between items-end mb-20 gap-8">
                 <div class="max-w-2xl">

@@ -5,7 +5,7 @@
             <div class="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center">
                 <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
             </div>
-            <span class="text-xl font-black text-gray-900 dark:text-white tracking-tight">Logis<span class="text-brand-500">Maghreb</span></span>
+            <span class="text-xl font-black text-gray-900 dark:text-white tracking-tight">Logi<span class="text-brand-500">Morocco</span></span>
         </a>
     </div>
 

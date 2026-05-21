@@ -75,10 +75,7 @@ class AdminFinancialControl extends Component
 
     public function render()
     {
-        $merchants = User::where('role', 'merchant')->where('balance', '>', 0)->get();
-        $livreurs = User::where('role', 'livreur')->where('balance', '>', 0)->get();
-        $recentTransactions = Transaction::with('user')->latest()->take(10)->get();
-
-        return view('livewire.admin-financial-control', compact('merchants', 'livreurs', 'recentTransactions'));
+        return view('livewire.admin-financial-control')
+            ->layout('layouts.admin-iframe');
     }
 }
