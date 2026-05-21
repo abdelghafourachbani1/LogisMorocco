@@ -3,10 +3,51 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+function getCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) {
+    const cookieValue = parts.pop()?.split(";").shift();
+    return cookieValue ? decodeURIComponent(cookieValue) : null;
+  }
+  return null;
+}
+
+function getApiUrl(path: string): string {
+  const host = typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:8000"
+    : "http://127.0.0.1:8000";
+  return `${host}${path}`;
+}
+
 export default function HeaderProfile() {
   const [isOpen, setIsOpen] = useState(false);
+  const [user, setUser] = useState<{ name: string; role: string } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  // Fetch active user details
+  useEffect(() => {
+    async function fetchUser() {
+      try {
+        const res = await fetch(getApiUrl("/api/user"), {
+          method: "GET",
+          headers: {
+            "Accept": "application/json",
+          },
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch user context:", err);
+      }
+    }
+    fetchUser();
+  }, []);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -24,12 +65,14 @@ export default function HeaderProfile() {
       router.push("/profile");
     } else if (action === "logout") {
       try {
+        const xsrfToken = getCookie("XSRF-TOKEN");
         // Call Laravel's logout endpoint
-        await fetch("http://localhost:8000/logout", {
+        await fetch(getApiUrl("/api/logout"), {
           method: "POST",
           headers: {
             "Accept": "application/json",
             "Content-Type": "application/json",
+            ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {}),
           },
           credentials: "include",
         });
@@ -50,11 +93,13 @@ export default function HeaderProfile() {
         className="flex items-center gap-3 p-1 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition focus:outline-none"
       >
         <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-brand-500 to-brand-300 flex items-center justify-center text-white font-bold text-sm shadow-sm">
-          A
+          {user ? user.name.charAt(0).toUpperCase() : "A"}
         </div>
         <div className="text-left hidden sm:block">
-          <p className="text-sm font-semibold text-gray-900 leading-tight">Admin</p>
-          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Super Administrator</p>
+          <p className="text-sm font-semibold text-gray-900 leading-tight">{user ? user.name : "Loading..."}</p>
+          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+            {user ? (user.role === "admin" ? "Super Administrator" : user.role) : "Super Administrator"}
+          </p>
         </div>
         <svg
           className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`}

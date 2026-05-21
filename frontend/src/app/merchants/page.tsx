@@ -1,54 +1,94 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Filter, ShieldCheck, Key, ShieldAlert, BadgeCheck, CheckCircle2, TrendingUp, AlertTriangle } from "lucide-react";
 
 interface Merchant {
   id: number;
-  businessName: string;
-  owner: string;
+  name: string;
   email: string;
-  avatar: string;
-  integrationMode: "API" | "Dashboard";
-  apiKeyStatus: "Active" | "Inactive" | "None";
-  activeOrders: number;
-  monthlyRevenue: number;
-  status: "Approved" | "Pending Verification" | "Suspended";
-  joinedDate: string;
+  phone: string | null;
+  email_verified_at: string | null;
+  region: string;
+  created_at: string;
 }
 
-const initialMerchants: Merchant[] = [
-  { id: 1, businessName: "ElectroMaroc S.A.R.L", owner: "Kamal Naciri", email: "contact@electromaroc.ma", avatar: "EM", integrationMode: "API", apiKeyStatus: "Active", activeOrders: 142, monthlyRevenue: 184500, status: "Approved", joinedDate: "Dec 12, 2024" },
-  { id: 2, businessName: "Marrakech Craft Boutique", owner: "Fatima Zahra", email: "info@marrakechcrafts.com", avatar: "MC", integrationMode: "Dashboard", apiKeyStatus: "None", activeOrders: 28, monthlyRevenue: 34200, status: "Approved", joinedDate: "Jan 28, 2025" },
-  { id: 3, businessName: "Jumia Morocco Partner", owner: "Jumia Hub Team", email: "partners-support@jumia.ma", avatar: "JM", integrationMode: "API", apiKeyStatus: "Active", activeOrders: 984, monthlyRevenue: 789200, status: "Approved", joinedDate: "Oct 15, 2024" },
-  { id: 4, businessName: "Fashion Hub Casablanca", owner: "Anas Bennani", email: "sales@fashionhub.ma", avatar: "FH", integrationMode: "Dashboard", apiKeyStatus: "Inactive", activeOrders: 0, monthlyRevenue: 0, status: "Pending Verification", joinedDate: "May 18, 2026" },
-  { id: 5, businessName: "BioMorocco Organics", owner: "Salma Guessous", email: "wholesale@biomorocco.co", avatar: "BM", integrationMode: "API", apiKeyStatus: "Active", activeOrders: 54, monthlyRevenue: 62100, status: "Suspended", joinedDate: "Feb 10, 2025" },
-  { id: 6, businessName: "Atlas Spices Export", owner: "Rachid Idrissi", email: "export@atlasspices.com", avatar: "AS", integrationMode: "Dashboard", apiKeyStatus: "None", activeOrders: 12, monthlyRevenue: 18900, status: "Approved", joinedDate: "Mar 04, 2025" },
-];
+function getCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) {
+    const cookieValue = parts.pop()?.split(";").shift();
+    return cookieValue ? decodeURIComponent(cookieValue) : null;
+  }
+  return null;
+}
+
+function getApiUrl(path: string): string {
+  const host = typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:8000"
+    : "http://127.0.0.1:8000";
+  return `${host}${path}`;
+}
 
 export default function Merchants() {
-  const [merchants, setMerchants] = useState<Merchant[]>(initialMerchants);
+  const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleApprove = (id: number) => {
-    setMerchants(merchants.map(m => m.id === id ? { ...m, status: "Approved", apiKeyStatus: m.integrationMode === "API" ? "Active" : "None" } : m));
-  };
-
-  const handleToggleSuspend = (id: number) => {
-    setMerchants(merchants.map(m => {
-      if (m.id === id) {
-        return { ...m, status: m.status === "Suspended" ? "Approved" : "Suspended" };
+  const fetchMerchants = async () => {
+    setIsLoading(true);
+    try {
+      const queryParams = new URLSearchParams();
+      queryParams.append("role", "merchant");
+      if (search) {
+        queryParams.append("search", search);
       }
-      return m;
-    }));
+      if (statusFilter === "Approved") {
+        queryParams.append("status", "active");
+      } else if (statusFilter === "Pending Verification") {
+        queryParams.append("status", "pending");
+      }
+
+      const res = await fetch(getApiUrl(`/api/admin/users?${queryParams.toString()}`), {
+        headers: { "Accept": "application/json" },
+        credentials: "include"
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setMerchants(data.users || []);
+      }
+    } catch (err) {
+      console.error("Failed to load merchants:", err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const filteredMerchants = merchants.filter(m => {
-    const matchesSearch = m.businessName.toLowerCase().includes(search.toLowerCase()) || m.owner.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === "All" || m.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  useEffect(() => {
+    fetchMerchants();
+  }, [search, statusFilter]);
+
+  const handleApprove = async (id: number) => {
+    try {
+      const xsrfToken = getCookie("XSRF-TOKEN");
+      const res = await fetch(getApiUrl(`/api/admin/users/${id}/approve`), {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {}),
+        },
+        credentials: "include",
+      });
+      if (res.ok) {
+        fetchMerchants();
+      }
+    } catch (err) {
+      console.error("Approve failed:", err);
+    }
+  };
 
   return (
     <div className="p-8 space-y-8 max-w-7xl mx-auto">
@@ -65,7 +105,7 @@ export default function Merchants() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total Partners</span>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total Merchants</span>
             <h3 className="text-2xl font-black text-gray-900 mt-1">{merchants.length}</h3>
           </div>
           <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400">
@@ -75,9 +115,9 @@ export default function Merchants() {
 
         <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">API Integrations</span>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">eCom Integrations</span>
             <h3 className="text-2xl font-black text-gray-900 mt-1">
-              {merchants.filter(m => m.integrationMode === "API").length}
+              {merchants.length}
             </h3>
           </div>
           <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
@@ -87,9 +127,9 @@ export default function Merchants() {
 
         <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Monthly Vol. (MAD)</span>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Verified Accounts</span>
             <h3 className="text-2xl font-black text-emerald-600 mt-1">
-              {merchants.reduce((acc, curr) => acc + curr.monthlyRevenue, 0).toLocaleString()} DH
+              {merchants.filter(m => m.email_verified_at !== null).length}
             </h3>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center">
@@ -101,7 +141,7 @@ export default function Merchants() {
           <div>
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Requires Verification</span>
             <h3 className="text-2xl font-black text-brand-500 mt-1">
-              {merchants.filter(m => m.status === "Pending Verification").length}
+              {merchants.filter(m => m.email_verified_at === null).length}
             </h3>
           </div>
           <div className="w-10 h-10 rounded-xl bg-pink-50 text-brand-500 flex items-center justify-center">
@@ -119,7 +159,7 @@ export default function Merchants() {
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Search business, owner name..."
+              placeholder="Search merchant name or email..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full bg-gray-50 border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white"
@@ -127,7 +167,7 @@ export default function Merchants() {
           </div>
 
           <div className="flex gap-2 w-full md:w-auto">
-            {["All", "Approved", "Pending Verification", "Suspended"].map((status) => (
+            {["All", "Approved", "Pending Verification"].map((status) => (
               <button
                 key={status}
                 onClick={() => setStatusFilter(status)}
@@ -145,114 +185,87 @@ export default function Merchants() {
 
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-gray-100 text-[11px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50/50">
-                <th className="py-4 px-6">Merchant Business</th>
-                <th className="py-4 px-6">Integration</th>
-                <th className="py-4 px-6">API Key Status</th>
-                <th className="py-4 px-6">Live Shipments</th>
-                <th className="py-4 px-6">Monthly Revenue</th>
-                <th className="py-4 px-6">Status</th>
-                <th className="py-4 px-6 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50 text-xs font-semibold text-gray-800">
-              {filteredMerchants.map((merchant) => (
-                <tr key={merchant.id} className="hover:bg-gray-50/30 transition-colors">
-                  
-                  {/* Business Name and Owner */}
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-pink-50 text-brand-500 font-black flex items-center justify-center text-sm border border-pink-100">
-                        {merchant.avatar}
-                      </div>
-                      <div>
-                        <p className="font-bold text-gray-900 text-sm">{merchant.businessName}</p>
-                        <span className="text-[10px] text-gray-400 font-bold block">{merchant.owner} • {merchant.email}</span>
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* Integration Mode */}
-                  <td className="py-4 px-6">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      merchant.integrationMode === "API" 
-                        ? "bg-indigo-50 text-indigo-700 border border-indigo-100" 
-                        : "bg-gray-100 text-gray-600"
-                    }`}>
-                      {merchant.integrationMode}
-                    </span>
-                  </td>
-
-                  {/* API Key Status */}
-                  <td className="py-4 px-6">
-                    <span className={`inline-flex items-center gap-1.5 font-bold ${
-                      merchant.apiKeyStatus === "Active" ? "text-emerald-600" :
-                      merchant.apiKeyStatus === "Inactive" ? "text-amber-500" :
-                      "text-gray-400 font-medium"
-                    }`}>
-                      {merchant.apiKeyStatus}
-                    </span>
-                  </td>
-
-                  {/* Live Shipments */}
-                  <td className="py-4 px-6 text-gray-700">
-                    {merchant.activeOrders} active
-                  </td>
-
-                  {/* Monthly revenue */}
-                  <td className="py-4 px-6 font-bold text-gray-900">
-                    {merchant.monthlyRevenue.toLocaleString()} MAD
-                  </td>
-
-                  {/* Status */}
-                  <td className="py-4 px-6">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border ${
-                      merchant.status === "Approved" ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
-                      merchant.status === "Pending Verification" ? "bg-amber-50 text-amber-700 border-amber-100 animate-pulse" :
-                      "bg-red-50 text-red-700 border-red-100"
-                    }`}>
-                      {merchant.status}
-                    </span>
-                  </td>
-
-                  {/* Actions */}
-                  <td className="py-4 px-6 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {merchant.status === "Pending Verification" ? (
-                        <button 
-                          onClick={() => handleApprove(merchant.id)}
-                          className="flex items-center gap-1 bg-zinc-950 hover:bg-zinc-800 text-white px-3 py-1.5 rounded-xl text-[10px] font-bold shadow-sm transition-all"
-                        >
-                          <CheckCircle2 className="w-3 h-3" />
-                          Verify
-                        </button>
-                      ) : (
-                        <>
-                          <button 
-                            onClick={() => handleToggleSuspend(merchant.id)}
-                            className={`p-2 rounded-xl border transition-colors ${
-                              merchant.status === "Suspended" 
-                                ? "bg-emerald-50 border-emerald-100 text-emerald-600 hover:bg-emerald-100" 
-                                : "bg-red-50 border-red-100 text-red-600 hover:bg-red-100"
-                            }`}
-                            title={merchant.status === "Suspended" ? "Approve" : "Suspend"}
-                          >
-                            {merchant.status === "Suspended" ? <ShieldCheck className="w-4 h-4" /> : <ShieldAlert className="w-4 h-4" />}
-                          </button>
-                          <button className="px-3 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 text-gray-600 rounded-xl font-bold text-[10px] transition-colors">
-                            API Configuration
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-
+          {isLoading ? (
+            <div className="py-20 text-center text-sm font-bold text-gray-400">
+              Loading merchant partners...
+            </div>
+          ) : merchants.length === 0 ? (
+            <div className="py-20 text-center text-sm font-bold text-gray-400">
+              No merchant partners found.
+            </div>
+          ) : (
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-gray-100 text-[11px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50/50">
+                  <th className="py-4 px-6">Merchant Business</th>
+                  <th className="py-4 px-6">Location</th>
+                  <th className="py-4 px-6">Joined Date</th>
+                  <th className="py-4 px-6">Status</th>
+                  <th className="py-4 px-6 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-50 text-xs font-semibold text-gray-800">
+                {merchants.map((merchant) => {
+                  const isVerified = merchant.email_verified_at !== null;
+                  const joinedDate = new Date(merchant.created_at).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric"
+                  });
+
+                  return (
+                    <tr key={merchant.id} className="hover:bg-gray-50/30 transition-colors">
+                      
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-pink-50 text-brand-500 font-black flex items-center justify-center text-sm border border-pink-100">
+                            {merchant.name.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-bold text-gray-900 text-sm">{merchant.name}</p>
+                            <span className="text-[10px] text-gray-400 font-bold block">{merchant.email} {merchant.phone ? `| ${merchant.phone}` : ""}</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-4 px-6 text-gray-500 font-medium">
+                        {merchant.region}, MA
+                      </td>
+
+                      <td className="py-4 px-6 text-gray-400 font-bold">
+                        {joinedDate}
+                      </td>
+
+                      <td className="py-4 px-6">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                          isVerified ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-amber-50 text-amber-700 border-amber-100 animate-pulse"
+                        }`}>
+                          {isVerified ? "Approved" : "Pending Verification"}
+                        </span>
+                      </td>
+
+                      <td className="py-4 px-6 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {!isVerified ? (
+                            <button 
+                              onClick={() => handleApprove(merchant.id)}
+                              className="flex items-center gap-1 bg-zinc-950 hover:bg-zinc-800 text-white px-3 py-1.5 rounded-xl text-[10px] font-bold shadow-sm transition-all"
+                            >
+                              <CheckCircle2 className="w-3 h-3" />
+                              Verify
+                            </button>
+                          ) : (
+                            <span className="text-[10px] font-bold text-gray-400">Verified Partner</span>
+                          )}
+                        </div>
+                      </td>
+
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
 
       </div>

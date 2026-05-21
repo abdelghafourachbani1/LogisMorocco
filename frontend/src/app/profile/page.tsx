@@ -1,21 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+
+function getApiUrl(path: string): string {
+  const host = typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:8000"
+    : "http://127.0.0.1:8000";
+  return `${host}${path}`;
+}
 
 export default function ProfilePage() {
   const [profileData, setProfileData] = useState({
-    name: "Admin. Driss",
-    email: "admin@gmail.com",
-    role: "Super Administrator",
-    phone: "+212 600-000000",
+    name: "",
+    email: "",
+    role: "",
+    phone: "",
   });
+  const [isLoading, setIsLoading] = useState(true);
 
   const [passwords, setPasswords] = useState({
     currentPassword: "",
     newPassword: "",
     confirmPassword: "",
   });
+
+  const fetchProfile = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(getApiUrl("/api/user"), {
+        headers: { "Accept": "application/json" },
+        credentials: "include"
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProfileData({
+          name: data.name || "",
+          email: data.email || "",
+          role: data.role || "user",
+          phone: data.phone || "",
+        });
+      }
+    } catch (err) {
+      console.error("Failed to load profile:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
 
   const handleProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,6 +61,14 @@ export default function ProfilePage() {
     e.preventDefault();
     alert("Password updated successfully (mock). In production, this updates via Laravel API.");
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center font-bold text-gray-400 text-sm">
+        Loading profile credentials...
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 space-y-8 max-w-4xl mx-auto">
@@ -38,7 +81,7 @@ export default function ProfilePage() {
           </p>
         </div>
         <Link
-          href="/"
+          href="/dashboard"
           className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border border-gray-100 shadow-sm text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -52,11 +95,11 @@ export default function ProfilePage() {
         {/* Left Card: Summary */}
         <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm text-center flex flex-col items-center justify-center">
           <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-brand-500 to-brand-300 flex items-center justify-center text-white font-extrabold text-3xl shadow-md mb-4">
-            D
+            {profileData.name ? profileData.name.charAt(0).toUpperCase() : "U"}
           </div>
           <h3 className="text-xl font-bold text-gray-900">{profileData.name}</h3>
           <p className="text-xs font-bold text-brand-500 uppercase tracking-widest mt-1">
-            {profileData.role}
+            {profileData.role === "livreur" ? "Driver/Courier" : profileData.role}
           </p>
           <p className="text-sm text-gray-400 font-medium mt-2">{profileData.email}</p>
         </div>
@@ -111,7 +154,7 @@ export default function ProfilePage() {
                     type="text"
                     value={profileData.role}
                     disabled
-                    className="w-full bg-gray-50 border border-gray-100 px-4 py-2.5 rounded-xl text-sm text-gray-400 font-semibold cursor-not-allowed"
+                    className="w-full bg-gray-50 border border-gray-100 px-4 py-2.5 rounded-xl text-sm text-gray-400 font-semibold cursor-not-allowed capitalize"
                   />
                 </div>
               </div>

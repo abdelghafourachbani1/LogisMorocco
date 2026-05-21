@@ -1,18 +1,21 @@
 <?php
 
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
-use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules;
 use Illuminate\Validation\ValidationException;
 
-Route::middleware('guest')->group(function () {
-
-    Route::post('/register', function (Request $request) {
+class AuthController extends Controller
+{
+    public function register(Request $request)
+    {
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
@@ -35,9 +38,10 @@ Route::middleware('guest')->group(function () {
             'user' => $user,
             'message' => 'Registration successful',
         ], 201);
-    })->name('register');
+    }
 
-    Route::post('/login', function (Request $request) {
+    public function login(Request $request)
+    {
         $request->validate([
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
@@ -55,9 +59,18 @@ Route::middleware('guest')->group(function () {
             'user' => Auth::user(),
             'message' => 'Login successful',
         ]);
-    })->name('login');
+    }
 
-    Route::post('/forgot-password', function (Request $request) {
+    public function logout(Request $request)
+    {
+        Auth::guard('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+        return response()->json(['message' => 'Logged out successfully']);
+    }
+
+    public function forgotPassword(Request $request)
+    {
         $request->validate([
             'email' => ['required', 'email'],
         ]);
@@ -69,9 +82,10 @@ Route::middleware('guest')->group(function () {
         return $status === Password::RESET_LINK_SENT
             ? response()->json(['status' => __($status)])
             : response()->json(['message' => __($status)], 400);
-    })->name('password.email');
+    }
 
-    Route::post('/reset-password', function (Request $request) {
+    public function resetPassword(Request $request)
+    {
         $request->validate([
             'token' => ['required'],
             'email' => ['required', 'email'],
@@ -86,12 +100,17 @@ Route::middleware('guest')->group(function () {
                     'remember_token' => Str::random(60),
                 ])->save();
 
-                event(new Illuminate\Auth\Events\PasswordReset($user));
+                event(new \Illuminate\Auth\Events\PasswordReset($user));
             }
         );
 
         return $status === Password::PASSWORD_RESET
             ? response()->json(['status' => __($status)])
             : response()->json(['message' => __($status)], 400);
-    })->name('password.store');
-});
+    }
+
+    public function user(Request $request)
+    {
+        return response()->json($request->user());
+    }
+}

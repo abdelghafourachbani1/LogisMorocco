@@ -4,6 +4,24 @@ import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
+function getCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) {
+    const cookieValue = parts.pop()?.split(";").shift();
+    return cookieValue ? decodeURIComponent(cookieValue) : null;
+  }
+  return null;
+}
+
+function getApiUrl(path: string): string {
+  const host = typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:8000"
+    : "http://127.0.0.1:8000";
+  return `${host}${path}`;
+}
+
 function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -31,17 +49,20 @@ function ResetPasswordForm() {
 
     try {
       // 1. Get CSRF Cookie
-      await fetch("http://localhost:8000/sanctum/csrf-cookie", {
+      await fetch(getApiUrl("/sanctum/csrf-cookie"), {
         method: "GET",
         credentials: "include",
       });
 
+      const xsrfToken = getCookie("XSRF-TOKEN");
+
       // 2. Perform Request
-      const response = await fetch("http://localhost:8000/reset-password", {
+      const response = await fetch(getApiUrl("/api/reset-password"), {
         method: "POST",
         headers: {
           "Accept": "application/json",
           "Content-Type": "application/json",
+          ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {}),
         },
         body: JSON.stringify({
           token,

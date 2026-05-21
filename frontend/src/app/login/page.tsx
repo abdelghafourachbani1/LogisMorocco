@@ -3,10 +3,28 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+function getCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) {
+    const cookieValue = parts.pop()?.split(";").shift();
+    return cookieValue ? decodeURIComponent(cookieValue) : null;
+  }
+  return null;
+}
+
+function getApiUrl(path: string): string {
+  const host = typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:8000"
+    : "http://127.0.0.1:8000";
+  return `${host}${path}`;
+}
+
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@gmail.com");
-  const [password, setPassword] = useState("azertyui");
+  const [email, setEmail] = useState("admin@logismaghreb.com");
+  const [password, setPassword] = useState("password");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -17,17 +35,20 @@ export default function LoginPage() {
 
     try {
       // 1. Get CSRF Cookie from Laravel backend
-      await fetch("http://localhost:8000/sanctum/csrf-cookie", {
+      await fetch(getApiUrl("/sanctum/csrf-cookie"), {
         method: "GET",
         credentials: "include",
       });
 
+      const xsrfToken = getCookie("XSRF-TOKEN");
+
       // 2. Perform Login request
-      const response = await fetch("http://localhost:8000/login", {
+      const response = await fetch(getApiUrl("/api/login"), {
         method: "POST",
         headers: {
           "Accept": "application/json",
           "Content-Type": "application/json",
+          ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {}),
         },
         body: JSON.stringify({ email, password }),
         credentials: "include",

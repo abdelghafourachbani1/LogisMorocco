@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   Download, 
   Sliders, 
@@ -16,50 +16,250 @@ import {
   Plus,
   CheckCircle2,
   AlertTriangle,
-  CloudLightning
+  CloudLightning,
+  X
 } from "lucide-react";
 
 interface OrderRow {
-  id: string;
-  orderId: string;
-  date: string;
-  customerName: string;
-  destination: string;
-  merchant: string;
-  status: "Failed Attempt" | "In Transit" | "Delivered" | "Dispatched";
-  value: number;
-  hasAlert?: boolean;
+  id: number;
+  tracking_number: string;
+  customer_name: string;
+  customer_phone: string;
+  customer_address: string;
+  amount_cod: number;
+  status: string;
+  created_at: string;
+  merchant?: { name: string } | null;
+  livreur?: { name: string } | null;
 }
 
-const initialOrders: OrderRow[] = [
-  { id: "1", orderId: "#LM-98231", date: "Oct 24, 14:20", customerName: "Yassine Mansouri", destination: "Casablanca, Maârif", merchant: "ElectroMaghreb", status: "Failed Attempt", value: 1450, hasAlert: true },
-  { id: "2", orderId: "#LM-98229", date: "Oct 24, 13:45", customerName: "Sara Benjelloun", destination: "Rabat, Agdal", merchant: "Vogue Morocco", status: "In Transit", value: 320 },
-  { id: "3", orderId: "#LM-98225", date: "Oct 24, 12:10", customerName: "Karim Idris", destination: "Tangier, City Center", merchant: "Decathlon MA", status: "Delivered", value: 890 },
-  { id: "4", orderId: "#LM-98224", date: "Oct 24, 11:55", customerName: "Imane Tazi", destination: "Marrakech, Gueliz", merchant: "Kitea Morocco", status: "Dispatched", value: 2100 }
-];
+interface DashboardStats {
+  total_orders?: number;
+  total_cod?: number;
+  delivered_count?: number;
+  in_transit_count?: number;
+  pending_count?: number;
+  balance?: number;
+  active_deliveries?: number;
+  available_orders?: number;
+}
+
+function getCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) {
+    const cookieValue = parts.pop()?.split(";").shift();
+    return cookieValue ? decodeURIComponent(cookieValue) : null;
+  }
+  return null;
+}
+
+function getApiUrl(path: string): string {
+  const host = typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:8000"
+    : "http://127.0.0.1:8000";
+  return `${host}${path}`;
+}
 
 export default function Orders() {
-  const [orders, setOrders] = useState<OrderRow[]>(initialOrders);
-  const [activeTab, setActiveTab] = useState<"All" | "Pending Dispatch" | "Out for Delivery" | "Returns (RTO)">("All");
+  const [userRole, setUserRole] = useState<string>("admin");
+  const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [stats, setStats] = useState<DashboardStats>({});
+  
+  // Filters
+  const [activeTab, setActiveTab] = useState<string>("All"); // Livreur: "available", "active"
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState("Newest First");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [totalEntries, setTotalEntries] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const filteredOrders = orders.filter(order => {
-    const matchesSearch = order.orderId.toLowerCase().includes(search.toLowerCase()) || 
-                          order.customerName.toLowerCase().includes(search.toLowerCase()) ||
-                          order.destination.toLowerCase().includes(search.toLowerCase());
-    
-    if (activeTab === "Pending Dispatch") {
-      return matchesSearch && order.status === "Dispatched";
+  // Create Order Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
+  const [amountCod, setAmountCod] = useState("");
+  const [modalError, setModalError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Fetch user role
+  const fetchUserRole = async () => {
+    try {
+      const res = await fetch(getApiUrl("/api/user"), {
+        headers: { "Accept": "application/json" },
+        credentials: "include"
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUserRole(data.role || "admin");
+        if (data.role === "livreur") {
+          setActiveTab("available");
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load user role:", err);
     }
-    if (activeTab === "Out for Delivery") {
-      return matchesSearch && order.status === "In Transit";
+  };
+
+  // Fetch KPI Stats
+  const fetchDashboardStats = async () => {
+    try {
+      const res = await fetch(getApiUrl("/api/dashboard"), {
+        headers: { "Accept": "application/json" },
+        credentials: "include"
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.stats) {
+          setStats(data.stats);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load dashboard stats:", err);
     }
-    if (activeTab === "Returns (RTO)") {
-      return matchesSearch && order.status === "Failed Attempt";
+  };
+
+  // Fetch Orders
+  const fetchOrders = async () => {
+    setIsLoading(true);
+    try {
+      const queryParams = new URLSearchParams();
+      queryParams.append("page", currentPage.toString());
+      
+      if (search) {
+        queryParams.append("search", search);
+      }
+
+      if (userRole === "livreur") {
+        queryParams.append("tab", activeTab === "active" ? "active" : "available");
+      } else {
+        if (statusFilter !== "All") {
+          queryParams.append("status", statusFilter);
+        }
+      }
+
+      const res = await fetch(getApiUrl(`/api/orders?${queryParams.toString()}`), {
+        headers: { "Accept": "application/json" },
+        credentials: "include"
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setOrders(data.orders || []);
+        if (data.meta) {
+          setCurrentPage(data.meta.current_page);
+          setLastPage(data.meta.last_page);
+          setTotalEntries(data.meta.total);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch orders:", err);
+    } finally {
+      setIsLoading(false);
     }
-    return matchesSearch;
-  });
+  };
+
+  useEffect(() => {
+    fetchUserRole();
+    fetchDashboardStats();
+  }, []);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [userRole, activeTab, search, statusFilter, currentPage]);
+
+  // Create Order Handler
+  const handleCreateOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setModalError("");
+    setIsSubmitting(true);
+
+    try {
+      const xsrfToken = getCookie("XSRF-TOKEN");
+      const res = await fetch(getApiUrl("/api/orders"), {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {})
+        },
+        body: JSON.stringify({
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          customer_address: customerAddress,
+          amount_cod: parseFloat(amountCod)
+        }),
+        credentials: "include"
+      });
+
+      if (res.ok) {
+        setIsModalOpen(false);
+        setCustomerName("");
+        setCustomerPhone("");
+        setCustomerAddress("");
+        setAmountCod("");
+        fetchOrders();
+        fetchDashboardStats();
+      } else {
+        const errData = await res.json();
+        setModalError(errData.message || "Failed to create order.");
+      }
+    } catch (err) {
+      console.error("Error creating order:", err);
+      setModalError("Unable to connect to the backend.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Claim Order Handler
+  const handleClaimOrder = async (id: number) => {
+    try {
+      const xsrfToken = getCookie("XSRF-TOKEN");
+      const res = await fetch(getApiUrl(`/api/orders/${id}/claim`), {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {})
+        },
+        credentials: "include"
+      });
+
+      if (res.ok) {
+        fetchOrders();
+        fetchDashboardStats();
+      }
+    } catch (err) {
+      console.error("Error claiming order:", err);
+    }
+  };
+
+  // Update Status Handler
+  const handleUpdateStatus = async (id: number, status: string) => {
+    try {
+      const xsrfToken = getCookie("XSRF-TOKEN");
+      const res = await fetch(getApiUrl(`/api/orders/${id}/status`), {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {})
+        },
+        body: JSON.stringify({ status }),
+        credentials: "include"
+      });
+
+      if (res.ok) {
+        fetchOrders();
+        fetchDashboardStats();
+      }
+    } catch (err) {
+      console.error("Error updating status:", err);
+    }
+  };
 
   return (
     <div className="p-8 space-y-6 max-w-7xl mx-auto">
@@ -80,26 +280,27 @@ export default function Orders() {
           </button>
           <button className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm">
             <Sliders className="w-4 h-4" />
-            Advanced Filters
+            Filters
           </button>
         </div>
       </div>
 
       {/* KPI Cards Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {/* Card 1: Active Orders */}
+        {/* Card 1: Total/Available Orders */}
         <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm flex flex-col justify-between relative overflow-hidden">
           <div className="flex items-center justify-between">
             <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center text-brand-500">
               <Calendar className="w-5 h-5" />
             </div>
-            <span className="text-[10px] font-black text-brand-500 bg-pink-50/50 px-2 py-0.5 rounded-md">
-              +12% vs LW
-            </span>
           </div>
           <div className="mt-4">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Active Orders</span>
-            <h3 className="text-3xl font-black text-gray-900 mt-1">1,284</h3>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">
+              {userRole === "livreur" ? "Available Orders" : "Total Orders"}
+            </span>
+            <h3 className="text-3xl font-black text-gray-900 mt-1">
+              {userRole === "livreur" ? (stats.available_orders ?? 0) : (stats.total_orders ?? 0)}
+            </h3>
           </div>
         </div>
 
@@ -109,45 +310,47 @@ export default function Orders() {
             <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-500">
               <Truck className="w-5 h-5" />
             </div>
-            <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-              On Schedule
-            </span>
           </div>
           <div className="mt-4">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">In Transit</span>
-            <h3 className="text-3xl font-black text-gray-900 mt-1">856</h3>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">
+              {userRole === "livreur" ? "Active Deliveries" : "In Transit"}
+            </span>
+            <h3 className="text-3xl font-black text-gray-900 mt-1">
+              {userRole === "livreur" ? (stats.active_deliveries ?? 0) : (stats.in_transit_count ?? 0)}
+            </h3>
           </div>
         </div>
 
-        {/* Card 3: Delayed/Issues */}
+        {/* Card 3: Delivered Count */}
         <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm flex flex-col justify-between relative overflow-hidden">
           <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center text-red-500">
-              <AlertCircle className="w-5 h-5 animate-pulse" />
+            <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-green-500">
+              <CheckCircle2 className="w-5 h-5" />
             </div>
-            <span className="text-[10px] font-black text-red-600 bg-red-50 px-2 py-0.5 rounded-md">
-              Action Required
-            </span>
           </div>
           <div className="mt-4">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Delayed/Issues</span>
-            <h3 className="text-3xl font-black text-gray-900 mt-1">42</h3>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Delivered Orders</span>
+            <h3 className="text-3xl font-black text-gray-900 mt-1">
+              {stats.delivered_count ?? 0}
+            </h3>
           </div>
         </div>
 
-        {/* Card 4: COD To Collect (Dark Card) */}
+        {/* Card 4: Financial Summary */}
         <div className="bg-[#0A0D10] text-white p-6 rounded-[24px] shadow-sm flex flex-col justify-between relative overflow-hidden">
           <div className="flex items-center justify-between">
             <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
               <RotateCw className="w-5 h-5 text-zinc-300" />
             </div>
-            <span className="text-[9px] font-extrabold uppercase tracking-widest text-zinc-400">
-              Live Flow
-            </span>
           </div>
           <div className="mt-4">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">COD to Collect</span>
-            <h3 className="text-3xl font-black text-white mt-1">128.4k <span className="text-sm font-bold text-zinc-400">MAD</span></h3>
+            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">
+              {userRole === "livreur" ? "COD Held" : "Total COD"}
+            </span>
+            <h3 className="text-3xl font-black text-white mt-1">
+              {userRole === "livreur" ? (stats.balance ?? 0) : (stats.total_cod ?? 0)}{" "}
+              <span className="text-sm font-bold text-zinc-400">MAD</span>
+            </h3>
           </div>
         </div>
       </div>
@@ -158,145 +361,333 @@ export default function Orders() {
         {/* Table Header Filter & Sorting */}
         <div className="p-6 border-b border-gray-50 flex flex-col sm:flex-row gap-4 items-center justify-between">
           <div className="flex border-b border-gray-100 w-full sm:w-auto">
-            {["All Orders", "Pending Dispatch", "Out for Delivery", "Returns (RTO)"].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab as any)}
-                className={`px-4 py-3 text-xs font-bold transition-all relative border-b-2 -mb-[2px] ${
-                  (activeTab === "All" && tab === "All Orders") || activeTab === tab
-                    ? "border-brand-500 text-brand-500"
-                    : "border-transparent text-gray-400 hover:text-gray-900"
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
+            {userRole === "livreur" ? (
+              <>
+                <button
+                  onClick={() => { setActiveTab("available"); setCurrentPage(1); }}
+                  className={`px-4 py-3 text-xs font-bold transition-all relative border-b-2 -mb-[2px] ${
+                    activeTab === "available" ? "border-brand-500 text-brand-500" : "border-transparent text-gray-400 hover:text-gray-900"
+                  }`}
+                >
+                  Available for Claim
+                </button>
+                <button
+                  onClick={() => { setActiveTab("active"); setCurrentPage(1); }}
+                  className={`px-4 py-3 text-xs font-bold transition-all relative border-b-2 -mb-[2px] ${
+                    activeTab === "active" ? "border-brand-500 text-brand-500" : "border-transparent text-gray-400 hover:text-gray-900"
+                  }`}
+                >
+                  My Active Shipments
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => { setStatusFilter("All"); setCurrentPage(1); }}
+                  className={`px-4 py-3 text-xs font-bold transition-all relative border-b-2 -mb-[2px] ${
+                    statusFilter === "All" ? "border-brand-500 text-brand-500" : "border-transparent text-gray-400 hover:text-gray-900"
+                  }`}
+                >
+                  All Orders
+                </button>
+                <button
+                  onClick={() => { setStatusFilter("pending"); setCurrentPage(1); }}
+                  className={`px-4 py-3 text-xs font-bold transition-all relative border-b-2 -mb-[2px] ${
+                    statusFilter === "pending" ? "border-brand-500 text-brand-500" : "border-transparent text-gray-400 hover:text-gray-900"
+                  }`}
+                >
+                  Pending Dispatch
+                </button>
+                <button
+                  onClick={() => { setStatusFilter("in_transit"); setCurrentPage(1); }}
+                  className={`px-4 py-3 text-xs font-bold transition-all relative border-b-2 -mb-[2px] ${
+                    statusFilter === "in_transit" ? "border-brand-500 text-brand-500" : "border-transparent text-gray-400 hover:text-gray-900"
+                  }`}
+                >
+                  Out for Delivery
+                </button>
+                <button
+                  onClick={() => { setStatusFilter("refused"); setCurrentPage(1); }}
+                  className={`px-4 py-3 text-xs font-bold transition-all relative border-b-2 -mb-[2px] ${
+                    statusFilter === "refused" ? "border-brand-500 text-brand-500" : "border-transparent text-gray-400 hover:text-gray-900"
+                  }`}
+                >
+                  Returns (RTO)
+                </button>
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-            <span className="text-xs text-gray-400 font-bold">Sort by:</span>
             <div className="relative">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="appearance-none bg-gray-50 hover:bg-gray-100/80 border border-gray-100 rounded-xl pl-4 pr-10 py-2 text-xs font-extrabold text-gray-800 focus:outline-none cursor-pointer"
-              >
-                <option value="Newest First">Newest First</option>
-                <option value="Value: High to Low">Value: High to Low</option>
-                <option value="Value: Low to High">Value: Low to High</option>
-              </select>
-              <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+                placeholder="Search tracking, client..."
+                className="bg-gray-50 border border-gray-100 rounded-xl pl-9 pr-4 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
             </div>
           </div>
         </div>
 
         {/* Orders Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-gray-50/40">
-                <th className="py-4 px-6">Order & Date</th>
-                <th className="py-4 px-6">Customer / Destination</th>
-                <th className="py-4 px-6">Merchant</th>
-                <th className="py-4 px-6">Courier Status</th>
-                <th className="py-4 px-6">Value</th>
-                <th className="py-4 px-6 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50 text-xs font-bold text-gray-700">
-              {filteredOrders.map((order) => (
-                <tr key={order.id} className="hover:bg-gray-50/30 transition-colors">
-                  
-                  {/* Order & Date */}
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-brand-500 text-sm hover:underline cursor-pointer">
-                        {order.orderId}
-                      </span>
-                      {order.hasAlert && (
-                        <AlertCircle className="w-4 h-4 text-red-500" />
-                      )}
-                    </div>
-                    <span className="text-[10px] text-gray-400 font-bold block mt-0.5">{order.date}</span>
-                  </td>
-
-                  {/* Customer / Destination */}
-                  <td className="py-4 px-6">
-                    <p className="font-extrabold text-gray-900">{order.customerName}</p>
-                    <span className="text-[10px] text-gray-400 font-bold block mt-0.5">{order.destination}</span>
-                  </td>
-
-                  {/* Merchant */}
-                  <td className="py-4 px-6 text-gray-500 font-semibold">
-                    {order.merchant}
-                  </td>
-
-                  {/* Courier Status */}
-                  <td className="py-4 px-6">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-extrabold ${
-                      order.status === "Delivered" ? "bg-emerald-50 text-emerald-700" :
-                      order.status === "In Transit" ? "bg-pink-50 text-brand-500" :
-                      order.status === "Failed Attempt" ? "bg-red-50 text-red-700" :
-                      "bg-gray-100 text-gray-700"
-                    }`}>
-                      {order.status === "Failed Attempt" ? "• Failed Attempt" : 
-                       order.status === "In Transit" ? "• In Transit" : 
-                       order.status === "Delivered" ? "• Delivered" : 
-                       "• Dispatched"}
-                    </span>
-                  </td>
-
-                  {/* Value */}
-                  <td className="py-4 px-6 font-extrabold text-gray-900 text-sm">
-                    {order.value.toLocaleString()} MAD
-                  </td>
-
-                  {/* Actions */}
-                  <td className="py-4 px-6 text-right">
-                    <button className="p-1 hover:bg-gray-50 rounded-lg text-gray-400 hover:text-gray-900 transition-colors">
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-                  </td>
-
+          {isLoading ? (
+            <div className="py-20 text-center font-bold text-gray-400 text-sm">
+              Loading orders...
+            </div>
+          ) : orders.length === 0 ? (
+            <div className="py-20 text-center font-bold text-gray-400 text-sm">
+              No orders found.
+            </div>
+          ) : (
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-gray-50/40">
+                  <th className="py-4 px-6">Order & Date</th>
+                  <th className="py-4 px-6">Customer / Destination</th>
+                  <th className="py-4 px-6">Merchant</th>
+                  <th className="py-4 px-6">Courier Status</th>
+                  <th className="py-4 px-6">Value</th>
+                  <th className="py-4 px-6 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-50 text-xs font-bold text-gray-700">
+                {orders.map((order) => {
+                  const dateString = new Date(order.created_at).toLocaleString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit"
+                  });
+
+                  return (
+                    <tr key={order.id} className="hover:bg-gray-50/30 transition-colors">
+                      
+                      {/* Order & Date */}
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-brand-500 text-sm hover:underline cursor-pointer">
+                            {order.tracking_number}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-gray-400 font-bold block mt-0.5">{dateString}</span>
+                      </td>
+
+                      {/* Customer / Destination */}
+                      <td className="py-4 px-6">
+                        <p className="font-extrabold text-gray-900">{order.customer_name}</p>
+                        <span className="text-[10px] text-gray-400 font-bold block mt-0.5">{order.customer_address}</span>
+                      </td>
+
+                      {/* Merchant */}
+                      <td className="py-4 px-6 text-gray-500 font-semibold">
+                        {order.merchant?.name ?? "LogiMerchant"}
+                      </td>
+
+                      {/* Courier Status */}
+                      <td className="py-4 px-6">
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-extrabold capitalize ${
+                          order.status === "delivered" ? "bg-emerald-50 text-emerald-700" :
+                          order.status === "in_transit" ? "bg-pink-50 text-brand-500" :
+                          order.status === "refused" ? "bg-red-50 text-red-700" :
+                          order.status === "canceled" ? "bg-gray-100 text-gray-400" :
+                          "bg-blue-50 text-blue-700"
+                        }`}>
+                          • {order.status === 'livreur' ? 'driver' : order.status}
+                        </span>
+                      </td>
+
+                      {/* Value */}
+                      <td className="py-4 px-6 font-extrabold text-gray-900 text-sm">
+                        {order.amount_cod.toLocaleString()} MAD
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-4 px-6 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {userRole === "livreur" && activeTab === "available" && (
+                            <button
+                              onClick={() => handleClaimOrder(order.id)}
+                              className="bg-brand-500 hover:bg-brand-600 text-white px-3 py-1.5 rounded-xl text-[10px] font-bold shadow-sm transition-all"
+                            >
+                              Claim Order
+                            </button>
+                          )}
+
+                          {userRole === "livreur" && activeTab === "active" && (
+                            <div className="flex items-center gap-1.5">
+                              <select
+                                onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
+                                defaultValue=""
+                                className="bg-gray-50 border border-gray-100 rounded-xl px-2 py-1.5 text-[10px] font-bold text-gray-700 focus:outline-none cursor-pointer"
+                              >
+                                <option value="" disabled>Complete...</option>
+                                <option value="delivered">Delivered</option>
+                                <option value="refused">Refused</option>
+                                <option value="canceled">Canceled</option>
+                              </select>
+                            </div>
+                          )}
+
+                          <button className="p-1 hover:bg-gray-50 rounded-lg text-gray-400 hover:text-gray-900 transition-colors">
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
 
-        {/* Pagination & Floating Button footer */}
+        {/* Pagination footer */}
         <div className="p-6 border-t border-gray-50 flex flex-col sm:flex-row items-center justify-between gap-4 relative">
-          <span className="text-xs font-semibold text-gray-400">Showing 1-10 of 1,284 orders</span>
+          <span className="text-xs font-semibold text-gray-400">
+            Showing {(currentPage - 1) * 10 + 1} to {Math.min(currentPage * 10, totalEntries)} of {totalEntries} orders
+          </span>
           
           <div className="flex items-center gap-1.5 mr-12 sm:mr-0">
-            <button className="p-2 border border-gray-100 rounded-xl hover:bg-gray-50 text-gray-400 hover:text-gray-900 transition-colors">
+            <button 
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="p-2 border border-gray-100 rounded-xl hover:bg-gray-50 text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-50"
+            >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <button className="w-8 h-8 rounded-xl bg-brand-500 text-white font-extrabold text-xs shadow-sm flex items-center justify-center">
-              1
-            </button>
-            <button className="w-8 h-8 rounded-xl hover:bg-gray-50 text-gray-500 font-bold text-xs flex items-center justify-center transition-colors">
-              2
-            </button>
-            <button className="w-8 h-8 rounded-xl hover:bg-gray-50 text-gray-500 font-bold text-xs flex items-center justify-center transition-colors">
-              3
-            </button>
-            <span className="text-gray-400 font-bold px-1 text-xs">...</span>
-            <button className="w-8 h-8 rounded-xl hover:bg-gray-50 text-gray-500 font-bold text-xs flex items-center justify-center transition-colors">
-              128
-            </button>
-            <button className="p-2 border border-gray-100 rounded-xl hover:bg-gray-50 text-gray-400 hover:text-gray-900 transition-colors">
+
+            {Array.from({ length: lastPage }, (_, i) => i + 1).map((p) => (
+              <button
+                key={p}
+                onClick={() => setCurrentPage(p)}
+                className={`w-8 h-8 rounded-xl font-extrabold text-xs flex items-center justify-center transition-all ${
+                  p === currentPage 
+                    ? "bg-brand-500 text-white shadow-sm" 
+                    : "hover:bg-gray-50 text-gray-500"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+
+            <button 
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, lastPage))}
+              disabled={currentPage === lastPage}
+              className="p-2 border border-gray-100 rounded-xl hover:bg-gray-50 text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-50"
+            >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Floating plus button */}
-          <button className="absolute -top-5 right-6 w-11 h-11 rounded-full bg-brand-500 hover:bg-brand-600 text-white shadow-md shadow-brand-500/20 flex items-center justify-center transition-all hover:scale-105">
-            <Plus className="w-5 h-5 stroke-[3]" />
-          </button>
+          {/* Floating plus button for Merchant */}
+          {userRole === "merchant" && (
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="absolute -top-5 right-6 w-11 h-11 rounded-full bg-brand-500 hover:bg-brand-600 text-white shadow-md shadow-brand-500/20 flex items-center justify-center transition-all hover:scale-105"
+            >
+              <Plus className="w-5 h-5 stroke-[3]" />
+            </button>
+          )}
         </div>
 
       </div>
+
+      {/* Create Order Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[28px] border border-gray-100 shadow-2xl p-8 max-w-md w-full relative space-y-6">
+            <button 
+              onClick={() => setIsModalOpen(false)}
+              className="absolute right-6 top-6 text-gray-400 hover:text-gray-900 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="space-y-1">
+              <h3 className="text-xl font-black text-gray-900 tracking-tight">Create Order</h3>
+              <p className="text-xs font-semibold text-gray-500">Add a new cash-on-delivery delivery shipment.</p>
+            </div>
+
+            {modalError && (
+              <div className="bg-red-50 text-red-600 text-xs font-semibold px-4 py-3 rounded-xl border border-red-100">
+                {modalError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateOrder} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                  Customer Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="w-full bg-[#F3F4F6]/50 px-4 py-3 rounded-xl text-sm border-none focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-800 font-medium"
+                  placeholder="e.g. Karim Bennani"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                  Customer Phone
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  className="w-full bg-[#F3F4F6]/50 px-4 py-3 rounded-xl text-sm border-none focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-800 font-medium"
+                  placeholder="e.g. +212 661-234567"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                  Customer Address
+                </label>
+                <textarea
+                  required
+                  value={customerAddress}
+                  onChange={(e) => setCustomerAddress(e.target.value)}
+                  className="w-full bg-[#F3F4F6]/50 px-4 py-3 rounded-xl text-sm border-none focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-800 font-medium h-20 resize-none"
+                  placeholder="e.g. 45 Bd Zerktouni, Maarif, Casablanca"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                  COD Amount (MAD)
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  step="0.01"
+                  value={amountCod}
+                  onChange={(e) => setAmountCod(e.target.value)}
+                  className="w-full bg-[#F3F4F6]/50 px-4 py-3 rounded-xl text-sm border-none focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-800 font-medium"
+                  placeholder="e.g. 450.00"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full bg-brand-500 hover:bg-brand-600 text-white rounded-xl py-3 text-sm font-bold shadow-md shadow-brand-500/10 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              >
+                {isSubmitting ? "Creating Order..." : "Create Order"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Bottom section (Live Event Feed + Fleet distribution map) */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -318,7 +709,7 @@ export default function Orders() {
               </div>
               <div className="space-y-0.5">
                 <p className="text-xs font-semibold text-gray-700 leading-normal">
-                  <span className="font-bold text-gray-900">#LM-98225</span> was successfully delivered in Tangier.
+                  <span className="font-bold text-gray-900">#LOG-A82B3</span> was successfully delivered in Tangier.
                 </p>
                 <span className="text-[10px] text-gray-400 font-bold block">2 mins ago</span>
               </div>
@@ -334,32 +725,6 @@ export default function Orders() {
                   Driver <span className="font-bold text-gray-900">Reda S.</span> picked up 14 packages from Warehouse B.
                 </p>
                 <span className="text-[10px] text-gray-400 font-bold block">15 mins ago</span>
-              </div>
-            </div>
-
-            {/* Event 3 */}
-            <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-full bg-red-50 text-red-500 flex items-center justify-center shrink-0 mt-0.5">
-                <AlertTriangle className="w-4.5 h-4.5" />
-              </div>
-              <div className="space-y-0.5">
-                <p className="text-xs font-semibold text-gray-700 leading-normal">
-                  <span className="font-bold text-gray-900">#LM-98231</span> delivery failed. Customer unavailable.
-                </p>
-                <span className="text-[10px] text-gray-400 font-bold block">24 mins ago</span>
-              </div>
-            </div>
-
-            {/* Event 4 */}
-            <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center shrink-0 mt-0.5">
-                <CloudLightning className="w-4.5 h-4.5" />
-              </div>
-              <div className="space-y-0.5">
-                <p className="text-xs font-semibold text-gray-700 leading-normal">
-                  System sync: 45 new orders imported from Shopify API.
-                </p>
-                <span className="text-[10px] text-gray-400 font-bold block">42 mins ago</span>
               </div>
             </div>
           </div>
