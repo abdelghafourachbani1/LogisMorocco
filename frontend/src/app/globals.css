@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-brand-500: #DB0087;
+  --color-brand-600: #C20078;
+  --color-brand-700: #A80068;
+  --color-brand-50: #FFF0F6;
+  --color-brand-100: #FFE3EE;
+  
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+:root {
+  --background: #fafafa;
+  --foreground: #111111;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
