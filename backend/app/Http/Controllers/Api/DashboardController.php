@@ -71,11 +71,23 @@ class DashboardController extends Controller
 
     private function merchantDashboard(User $merchant)
     {
-        $totalOrders = $merchant->ordersAsMerchant()->count();
-        $totalCod = $merchant->ordersAsMerchant()->where('status', 'delivered')->sum('amount_cod');
-        $deliveredCount = $merchant->ordersAsMerchant()->where('status', 'delivered')->count();
-        $inTransitCount = $merchant->ordersAsMerchant()->where('status', 'in_transit')->count();
-        $pendingCount = $merchant->ordersAsMerchant()->where('status', 'pending')->count();
+        $orders = $merchant->ordersAsMerchant();
+        
+        $totalOrders = $orders->count();
+        $totalCod = floatval($orders->where('status', 'delivered')->sum('amount_cod'));
+        $deliveredCount = $orders->where('status', 'delivered')->count();
+        $inTransitCount = $orders->where('status', 'in_transit')->count();
+        $pendingCount = $orders->where('status', 'pending')->count();
+        $cancelledCount = $orders->where('status', 'cancelled')->count();
+        $refusedCount = $orders->where('status', 'refused')->count();
+
+        // Pending COD: orders that are in transit
+        $pendingCod = floatval($orders->where('status', 'in_transit')->sum('amount_cod'));
+
+        // Rates
+        $closedCount = $deliveredCount + $refusedCount + $cancelledCount;
+        $deliverySuccessRate = $closedCount > 0 ? round(($deliveredCount / $closedCount) * 100, 1) : 100.0;
+        $returnRate = $closedCount > 0 ? round(($refusedCount / $closedCount) * 100, 1) : 0.0;
 
         $recentOrders = $merchant->ordersAsMerchant()
             ->latest()
@@ -86,6 +98,7 @@ class DashboardController extends Controller
                     'id' => $o->id,
                     'tracking_number' => $o->tracking_number,
                     'customer_name' => $o->customer_name,
+                    'customer_address' => $o->customer_address,
                     'amount_cod' => floatval($o->amount_cod),
                     'status' => $o->status,
                     'date' => $o->created_at->format('M d, Y')
@@ -96,10 +109,15 @@ class DashboardController extends Controller
             'role' => 'merchant',
             'stats' => [
                 'total_orders' => $totalOrders,
-                'total_cod' => floatval($totalCod),
+                'total_cod' => $totalCod,
                 'delivered_count' => $deliveredCount,
                 'in_transit_count' => $inTransitCount,
                 'pending_count' => $pendingCount,
+                'cancelled_count' => $cancelledCount,
+                'refused_count' => $refusedCount,
+                'pending_cod' => $pendingCod,
+                'delivery_success_rate' => $deliverySuccessRate,
+                'return_rate' => $returnRate,
             ],
             'recent_orders' => $recentOrders
         ]);

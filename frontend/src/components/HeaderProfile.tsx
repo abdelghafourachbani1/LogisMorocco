@@ -98,7 +98,7 @@ export default function HeaderProfile() {
         <div className="text-left hidden sm:block">
           <p className="text-sm font-semibold text-gray-900 leading-tight">{user ? user.name : "Loading..."}</p>
           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-            {user ? (user.role === "admin" ? "Super Administrator" : user.role) : "Super Administrator"}
+            {user ? (user.role === "admin" ? "Super Administrator" : user.role === "merchant" ? "Main Merchant" : user.role) : "Super Administrator"}
           </p>
         </div>
         <svg

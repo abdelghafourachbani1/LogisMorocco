@@ -11,9 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-use Illuminate\Database\Eloquent\Relations\HasMany;
-
-#[Fillable(['name', 'email', 'password', 'role', 'phone', 'balance'])]
+#[Fillable(['name', 'email', 'password', 'role', 'phone', 'balance', 'webhook_url', 'webhook_secret', 'webhook_active', 'merchant_id', 'sub_role'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -25,6 +23,11 @@ class User extends Authenticatable
         return $this->hasMany(Order::class, 'merchant_id');
     }
 
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class, 'merchant_id');
+    }
+
     public function ordersAsLivreur(): HasMany
     {
         return $this->hasMany(Order::class, 'livreur_id');
@@ -33,6 +36,16 @@ class User extends Authenticatable
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class);
+    }
+
+    public function staff(): HasMany
+    {
+        return $this->hasMany(User::class, 'merchant_id');
+    }
+
+    public function merchant(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class, 'merchant_id');
     }
 
     /**

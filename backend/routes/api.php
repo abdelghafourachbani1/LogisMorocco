@@ -6,6 +6,10 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\FinanceController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\MerchantSettingsController;
+use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\CustomerController;
+use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\TeamController;
 
 // Public Auth routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -16,6 +20,7 @@ Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
+    Route::put('/user', [AuthController::class, 'updateProfile']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
     // Admin Users Management
@@ -26,9 +31,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/users/{id}/approve', [UserController::class, 'approve']);
 
     // Finances Management
-    Route::get('/finances', [FinanceController::class, 'index']);
-    Route::post('/admin/finances/payout', [FinanceController::class, 'processPayout']);
-    Route::post('/admin/finances/collect', [FinanceController::class, 'processCollection']);
+    Route::get('/finance', [FinanceController::class, 'index']);
+    Route::post('/finance/payout', [FinanceController::class, 'processPayout']);
+    Route::post('/finance/collect', [FinanceController::class, 'processCollection']);
 
     // Dashboard Metrics
     Route::get('/dashboard', [DashboardController::class, 'index']);
@@ -43,4 +48,26 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/merchant/tokens', [MerchantSettingsController::class, 'index']);
     Route::post('/merchant/tokens', [MerchantSettingsController::class, 'generate']);
     Route::delete('/merchant/tokens/{tokenId}', [MerchantSettingsController::class, 'delete']);
+    Route::post('/merchant/webhook', [MerchantSettingsController::class, 'updateWebhook']);
+    Route::post('/merchant/webhook/test', [MerchantSettingsController::class, 'testWebhook']);
+
+    // Merchant Products
+    Route::get('/products', [ProductController::class, 'index']);
+    Route::post('/products', [ProductController::class, 'store']);
+    Route::put('/products/{id}', [ProductController::class, 'update']);
+    Route::delete('/products/{id}', [ProductController::class, 'destroy']);
+
+    // Merchant Customers
+    Route::get('/customers', [CustomerController::class, 'index']);
+
+    // Notifications
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/read', [NotificationController::class, 'markAllAsRead']);
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+
+    // Merchant Team Management
+    Route::get('/team', [TeamController::class, 'index']);
+    Route::post('/team', [TeamController::class, 'store']);
+    Route::put('/team/{id}', [TeamController::class, 'update']);
+    Route::delete('/team/{id}', [TeamController::class, 'destroy']);
 });

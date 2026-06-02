@@ -162,6 +162,33 @@ export default function Orders() {
     }
   };
 
+  // Selected Order for Details Drawer
+  const [selectedOrder, setSelectedOrder] = useState<OrderRow | null>(null);
+
+  // Export to CSV Function
+  const handleExportCSV = () => {
+    if (orders.length === 0) return;
+    const headers = ["Tracking ID", "Customer Name", "Customer Phone", "Address", "COD Amount", "Status", "Date"];
+    const rows = orders.map(o => [
+      o.tracking_number,
+      o.customer_name,
+      o.customer_phone,
+      o.customer_address,
+      o.amount_cod,
+      o.status,
+      new Date(o.created_at).toLocaleString()
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(","), ...rows.map(e => e.map(val => `"${val}"`).join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `orders_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   useEffect(() => {
     fetchUserRole();
     fetchDashboardStats();
@@ -274,7 +301,10 @@ export default function Orders() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 bg-[#1A1D20] hover:bg-zinc-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm">
+          <button 
+            onClick={handleExportCSV}
+            className="flex items-center gap-2 bg-[#1A1D20] hover:bg-zinc-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+          >
             <Download className="w-4 h-4" />
             Export Data
           </button>
@@ -469,7 +499,10 @@ export default function Orders() {
                       {/* Order & Date */}
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-brand-500 text-sm hover:underline cursor-pointer">
+                          <span 
+                            onClick={() => setSelectedOrder(order)}
+                            className="font-extrabold text-brand-500 text-sm hover:underline cursor-pointer"
+                          >
                             {order.tracking_number}
                           </span>
                         </div>
@@ -685,6 +718,106 @@ export default function Orders() {
                 {isSubmitting ? "Creating Order..." : "Create Order"}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Order Details Drawer Modal */}
+      {selectedOrder && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[28px] border border-gray-100 shadow-2xl p-8 max-w-md w-full relative space-y-6">
+            <button 
+              onClick={() => setSelectedOrder(null)}
+              className="absolute right-6 top-6 text-gray-400 hover:text-gray-900 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="space-y-1">
+              <span className="text-[10px] font-black text-brand-500 uppercase tracking-widest">Shipment Details</span>
+              <h3 className="text-xl font-black text-gray-900 tracking-tight">{selectedOrder.tracking_number}</h3>
+              <p className="text-[10px] text-gray-400 font-bold">Created on {new Date(selectedOrder.created_at).toLocaleString()}</p>
+            </div>
+
+            {/* Status Timeline */}
+            <div className="space-y-4 bg-gray-50/50 p-4 rounded-2xl border border-gray-100/50">
+              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Delivery Lifecycle</h4>
+              <div className="space-y-4 relative pl-5">
+                <div className="absolute left-[7px] top-1.5 bottom-1.5 w-0.5 bg-gray-200"></div>
+
+                {/* Event 1: Created */}
+                <div className="relative flex gap-3 items-start">
+                  <span className="absolute -left-5 w-3.5 h-3.5 rounded-full border-2 border-white bg-green-500 shadow-sm mt-0.5 animate-pulse"></span>
+                  <div>
+                    <h5 className="text-xs font-extrabold text-gray-900">Shipment Created</h5>
+                    <p className="text-[10px] text-gray-400 font-semibold">Registered by Merchant</p>
+                  </div>
+                </div>
+
+                {/* Event 2: Claimed */}
+                <div className="relative flex gap-3 items-start">
+                  <span className={`absolute -left-5 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm mt-0.5 ${
+                    selectedOrder.livreur || selectedOrder.status !== "pending" ? "bg-green-500" : "bg-gray-200"
+                  }`}></span>
+                  <div>
+                    <h5 className="text-xs font-extrabold text-gray-900">Courier Allocated</h5>
+                    <p className="text-[10px] text-gray-400 font-semibold">
+                      {selectedOrder.livreur ? `Assigned to ${selectedOrder.livreur.name}` : "Awaiting driver claiming"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Event 3: Out for Delivery */}
+                <div className="relative flex gap-3 items-start">
+                  <span className={`absolute -left-5 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm mt-0.5 ${
+                    selectedOrder.status === "in_transit" || selectedOrder.status === "delivered" ? "bg-green-500" : "bg-gray-200"
+                  }`}></span>
+                  <div>
+                    <h5 className="text-xs font-extrabold text-gray-900">Out for Delivery</h5>
+                    <p className="text-[10px] text-gray-400 font-semibold">Courier dispatched to client address</p>
+                  </div>
+                </div>
+
+                {/* Event 4: Delivered or Canceled */}
+                <div className="relative flex gap-3 items-start">
+                  <span className={`absolute -left-5 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm mt-0.5 ${
+                    selectedOrder.status === "delivered" ? "bg-green-500" :
+                    selectedOrder.status === "refused" || selectedOrder.status === "canceled" ? "bg-red-500" : "bg-gray-200"
+                  }`}></span>
+                  <div>
+                    <h5 className="text-xs font-extrabold text-gray-900">
+                      {selectedOrder.status === "delivered" ? "Successfully Delivered" :
+                       selectedOrder.status === "refused" ? "Refused (Returned)" :
+                       selectedOrder.status === "canceled" ? "Cancelled" : "Delivery Status"}
+                    </h5>
+                    <p className="text-[10px] text-gray-400 font-semibold">Status confirmed by courier agent</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Customer Details */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Recipient Details</h4>
+              <div className="space-y-2 text-xs font-semibold text-gray-700">
+                <div className="flex justify-between border-b border-gray-50 pb-2">
+                  <span className="text-gray-400">Client Name</span>
+                  <span className="text-gray-900 font-bold">{selectedOrder.customer_name}</span>
+                </div>
+                <div className="flex justify-between border-b border-gray-50 pb-2">
+                  <span className="text-gray-400">Phone Number</span>
+                  <span className="text-gray-900 font-bold">{selectedOrder.customer_phone}</span>
+                </div>
+                <div className="flex justify-between border-b border-gray-50 pb-2">
+                  <span className="text-gray-400">Shipping Address</span>
+                  <span className="text-gray-900 font-bold text-right max-w-[200px]">{selectedOrder.customer_address}</span>
+                </div>
+                <div className="flex justify-between pt-1">
+                  <span className="text-gray-400">Cash COD Value</span>
+                  <span className="text-brand-500 font-black text-sm">{selectedOrder.amount_cod.toLocaleString()} MAD</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
