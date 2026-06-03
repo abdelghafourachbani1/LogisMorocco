@@ -10,8 +10,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'email', 'password', 'role', 'phone', 'balance', 'webhook_url', 'webhook_secret', 'webhook_active', 'merchant_id', 'sub_role'])]
+#[Fillable(['name', 'email', 'password', 'role', 'phone', 'balance', 'webhook_url', 'webhook_secret', 'webhook_active', 'merchant_id', 'sub_role', 'vehicle_type', 'vehicle_plate', 'cin', 'avatar_url', 'rating', 'available_balance', 'pending_balance', 'store_description', 'store_address', 'store_website', 'store_logo_url', 'bank_name', 'bank_rib', 'bank_holder_name'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {

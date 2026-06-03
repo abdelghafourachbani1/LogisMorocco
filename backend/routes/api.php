@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\TeamController;
+use App\Http\Controllers\Api\DriverController;
 
 // Public Auth routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -41,6 +42,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Orders Management
     Route::get('/orders', [OrderController::class, 'index']);
     Route::post('/orders', [OrderController::class, 'store']);
+    Route::get('/orders/import/template', [OrderController::class, 'importTemplate']);
+    Route::post('/orders/import/preview', [OrderController::class, 'previewImport']);
+    Route::post('/orders/import/confirm', [OrderController::class, 'confirmImport']);
     Route::post('/orders/{id}/claim', [OrderController::class, 'claim']);
     Route::post('/orders/{id}/status', [OrderController::class, 'updateStatus']);
 
@@ -70,4 +74,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/team', [TeamController::class, 'store']);
     Route::put('/team/{id}', [TeamController::class, 'update']);
     Route::delete('/team/{id}', [TeamController::class, 'destroy']);
+
+    // Driver Operations
+    Route::get('/driver/dashboard', [DriverController::class, 'dashboard']);
+    Route::get('/driver/orders/available', [DriverController::class, 'availableOrders']);
+    Route::post('/driver/orders/{id}/claim', [DriverController::class, 'claimOrder']);
+    Route::post('/driver/orders/{id}/reject', [DriverController::class, 'rejectOrder']);
+    Route::get('/driver/orders/active', [DriverController::class, 'activeDeliveries']);
+    Route::post('/driver/orders/{id}/status', [DriverController::class, 'updateStatus']);
+    Route::get('/driver/history', [DriverController::class, 'history']);
+    Route::get('/driver/wallet', [DriverController::class, 'wallet']);
+    Route::get('/driver/performance', [DriverController::class, 'performance']);
+    Route::put('/driver/profile', [DriverController::class, 'updateProfile']);
 });

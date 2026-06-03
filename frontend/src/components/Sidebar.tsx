@@ -70,6 +70,84 @@ export default function Sidebar() {
     }`;
   };
 
+  if (role === "livreur") {
+    return (
+      <aside className="w-64 bg-white border-r border-gray-100 flex flex-col justify-between h-screen flex-shrink-0 z-30 shadow-[4px_0_24px_rgba(0,0,0,0.01)]">
+        <div className="overflow-y-auto flex-1 scrollbar-thin">
+          {/* Logo */}
+          <div className="h-[72px] flex items-center px-6 border-b border-gray-100 gap-3 bg-white sticky top-0 z-10">
+            <div className="w-8 h-8 rounded-xl bg-orange-500 flex items-center justify-center text-white font-black text-base shadow-md shadow-orange-500/20">
+              D
+            </div>
+            <div>
+              <h1 className="font-extrabold text-gray-900 tracking-tight leading-none text-sm">LogiMorocco</h1>
+              <span className="text-[9px] font-bold text-orange-500 uppercase tracking-widest leading-none mt-1 block">Driver Portal</span>
+            </div>
+          </div>
+
+          {/* Navigation Menu for Driver */}
+          <div className="p-4 space-y-5">
+            {/* Group 1: Overview */}
+            <div className="space-y-1">
+              <span className="px-4 text-[9px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Overview</span>
+              <Link href="/driver/dashboard" className={getLinkClass("/driver/dashboard")}>
+                <Layout className="w-4 h-4" />
+                Dashboard
+              </Link>
+            </div>
+
+            {/* Group 2: Deliveries */}
+            <div className="space-y-1">
+              <span className="px-4 text-[9px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Deliveries</span>
+              <Link href="/driver/orders/available" className={getLinkClass("/driver/orders/available")}>
+                <Layers className="w-4 h-4" />
+                Available Orders
+              </Link>
+              <Link href="/driver/orders/active" className={getLinkClass("/driver/orders/active")}>
+                <ShoppingBag className="w-4 h-4" />
+                Active Deliveries
+              </Link>
+              <Link href="/driver/orders/history" className={getLinkClass("/driver/orders/history")}>
+                <FileText className="w-4 h-4" />
+                Delivery History
+              </Link>
+            </div>
+
+            {/* Group 3: Finance & Performance */}
+            <div className="space-y-1">
+              <span className="px-4 text-[9px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Finance & Stats</span>
+              <Link href="/driver/wallet" className={getLinkClass("/driver/wallet")}>
+                <CreditCard className="w-4 h-4" />
+                Wallet & Earnings
+              </Link>
+              <Link href="/driver/performance" className={getLinkClass("/driver/performance")}>
+                <BarChart3 className="w-4 h-4" />
+                Performance Metrics
+              </Link>
+            </div>
+
+            {/* Group 4: Support */}
+            <div className="space-y-1">
+              <span className="px-4 text-[9px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Support</span>
+              <Link href="/driver/support" className={getLinkClass("/driver/support")}>
+                <HelpCircle className="w-4 h-4" />
+                Help & Support
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Sidebar: Settings */}
+        <div className="p-4 border-t border-gray-50 bg-gray-50/30">
+          <Link href="/driver/settings" className={getLinkClass("/driver/settings")}>
+            <Settings className="w-4 h-4" />
+            Driver Settings
+          </Link>
+        </div>
+      </aside>
+    );
+  }
+
   if (role === "merchant") {
     return (
       <aside className="w-64 bg-white border-r border-gray-100 flex flex-col justify-between h-screen flex-shrink-0 z-30 shadow-[4px_0_24px_rgba(0,0,0,0.01)]">

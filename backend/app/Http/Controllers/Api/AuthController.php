@@ -124,6 +124,13 @@ class AuthController extends Controller
             'phone' => ['nullable', 'string', 'max:20'],
             'current_password' => ['nullable', 'string', 'required_with:new_password'],
             'new_password' => ['nullable', 'string', 'min:8', 'confirmed'],
+            'store_description' => ['nullable', 'string'],
+            'store_address' => ['nullable', 'string'],
+            'store_website' => ['nullable', 'string', 'max:255'],
+            'store_logo_url' => ['nullable', 'string', 'max:255'],
+            'bank_name' => ['nullable', 'string', 'max:255'],
+            'bank_rib' => ['nullable', 'string', 'max:24'],
+            'bank_holder_name' => ['nullable', 'string', 'max:255'],
         ]);
 
         if ($request->current_password) {
@@ -142,10 +149,17 @@ class AuthController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'phone' => $request->phone,
+            'store_description' => $request->store_description,
+            'store_address' => $request->store_address,
+            'store_website' => $request->store_website,
+            'store_logo_url' => $request->store_logo_url,
+            'bank_name' => $request->bank_name,
+            'bank_rib' => $request->bank_rib,
+            'bank_holder_name' => $request->bank_holder_name,
         ]);
 
         return response()->json([
-            'user' => $user,
+            'user' => $user->fresh(),
             'message' => 'Profile settings updated successfully.'
         ]);
     }

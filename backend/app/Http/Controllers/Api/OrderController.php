@@ -167,4 +167,108 @@ class OrderController extends Controller
             'order' => $order->fresh()
         ]);
     }
+
+    public function importTemplate()
+    {
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="orders_import_template.csv"',
+        ];
+
+        $callback = function () {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, ['customer_name', 'customer_phone', 'customer_address', 'amount_cod']);
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    public function previewImport(Request $request)
+    {
+        $merchant = $request->user();
+        if ($merchant->role !== 'merchant') {
+            return response()->json(['error' => 'Only merchants can import orders.'], 403);
+        }
+
+        $rows = $request->input('rows', []);
+        $validRows = [];
+        $invalidRows = [];
+
+        foreach ($rows as $index => $row) {
+            $errors = [];
+
+            if (empty($row['customer_name'])) {
+                $errors[] = 'Customer name is required.';
+            }
+            if (empty($row['customer_phone'])) {
+                $errors[] = 'Customer phone number is required.';
+            }
+            if (empty($row['customer_address'])) {
+                $errors[] = 'Customer address is required.';
+            }
+            
+            $amountCod = isset($row['amount_cod']) ? $row['amount_cod'] : '';
+            if ($amountCod === '' || !is_numeric($amountCod) || floatval($amountCod) < 0) {
+                $errors[] = 'COD Amount must be a valid positive number.';
+            }
+
+            if (count($errors) > 0) {
+                $invalidRows[] = [
+                    'index' => $index,
+                    'data' => $row,
+                    'errors' => $errors
+                ];
+            } else {
+                $validRows[] = [
+                    'customer_name' => $row['customer_name'],
+                    'customer_phone' => $row['customer_phone'],
+                    'customer_address' => $row['customer_address'],
+                    'amount_cod' => floatval($amountCod)
+                ];
+            }
+        }
+
+        return response()->json([
+            'valid_count' => count($validRows),
+            'invalid_count' => count($invalidRows),
+            'valid_rows' => $validRows,
+            'invalid_rows' => $invalidRows
+        ]);
+    }
+
+    public function confirmImport(Request $request)
+    {
+        $merchant = $request->user();
+        if ($merchant->role !== 'merchant') {
+            return response()->json(['error' => 'Only merchants can import orders.'], 403);
+        }
+
+        $rows = $request->input('rows', []);
+        
+        if (empty($rows)) {
+            return response()->json(['error' => 'No orders to import.'], 400);
+        }
+
+        $createdOrders = [];
+
+        DB::transaction(function() use ($merchant, $rows, &$createdOrders) {
+            foreach ($rows as $row) {
+                $order = $merchant->ordersAsMerchant()->create([
+                    'tracking_number' => 'LOG-' . strtoupper(Str::random(8)),
+                    'customer_name' => $row['customer_name'],
+                    'customer_phone' => $row['customer_phone'],
+                    'customer_address' => $row['customer_address'],
+                    'amount_cod' => floatval($row['amount_cod']),
+                    'status' => 'pending',
+                ]);
+                $createdOrders[] = $order;
+            }
+        });
+
+        return response()->json([
+            'message' => count($createdOrders) . ' orders successfully imported.',
+            'imported_count' => count($createdOrders)
+        ], 201);
+    }
 }

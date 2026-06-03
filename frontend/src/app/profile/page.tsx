@@ -38,6 +38,13 @@ export default function ProfilePage() {
     email: "",
     role: "",
     phone: "",
+    store_description: "",
+    store_address: "",
+    store_website: "",
+    store_logo_url: "",
+    bank_name: "",
+    bank_rib: "",
+    bank_holder_name: "",
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -48,6 +55,8 @@ export default function ProfilePage() {
     newPassword: "",
     confirmPassword: "",
   });
+
+  const [activeTab, setActiveTab] = useState<"profile" | "store" | "bank">("profile");
 
   const [profileFeedback, setProfileFeedback] = useState("");
   const [profileError, setProfileError] = useState("");
@@ -69,6 +78,13 @@ export default function ProfilePage() {
           email: data.email || "",
           role: data.role || "user",
           phone: data.phone || "",
+          store_description: data.store_description || "",
+          store_address: data.store_address || "",
+          store_website: data.store_website || "",
+          store_logo_url: data.store_logo_url || "",
+          bank_name: data.bank_name || "",
+          bank_rib: data.bank_rib || "",
+          bank_holder_name: data.bank_holder_name || "",
         });
       }
     } catch (err) {
@@ -101,19 +117,26 @@ export default function ProfilePage() {
           name: profileData.name,
           email: profileData.email,
           phone: profileData.phone || null,
+          store_description: profileData.store_description || null,
+          store_address: profileData.store_address || null,
+          store_website: profileData.store_website || null,
+          store_logo_url: profileData.store_logo_url || null,
+          bank_name: profileData.bank_name || null,
+          bank_rib: profileData.bank_rib || null,
+          bank_holder_name: profileData.bank_holder_name || null,
         }),
         credentials: "include"
       });
 
       if (res.ok) {
-        setProfileFeedback("Store profile details updated successfully.");
+        setProfileFeedback("Settings saved successfully.");
         fetchProfile();
       } else {
         const data = await res.json();
-        setProfileError(data.message || "Failed to update profile details.");
+        setProfileError(data.message || "Failed to save settings.");
       }
     } catch (err) {
-      setProfileError("Network error saving profile settings.");
+      setProfileError("Network error saving settings.");
     } finally {
       setIsSavingProfile(false);
     }
@@ -233,83 +256,265 @@ export default function ProfilePage() {
         {/* Right Column: Update Forms */}
         <div className="lg:col-span-8 space-y-6">
           
-          {/* Profile Details Form */}
-          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-6">
-            <div>
-              <h3 className="text-lg font-bold text-gray-900">Personal & Store Details</h3>
-              <p className="text-xs text-gray-400 font-medium">Manage details displayed on outgoing customer delivery receipts.</p>
+          {/* Tabs Navigation */}
+          {profileData.role === 'merchant' && (
+            <div className="flex gap-2 border-b border-gray-100 pb-1">
+              <button 
+                type="button"
+                onClick={() => setActiveTab("profile")}
+                className={`px-4 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${activeTab === 'profile' ? 'bg-[#1A1D20] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+              >
+                Profile Details
+              </button>
+              <button 
+                type="button"
+                onClick={() => setActiveTab("store")}
+                className={`px-4 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${activeTab === 'store' ? 'bg-[#1A1D20] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+              >
+                Store Customization
+              </button>
+              <button 
+                type="button"
+                onClick={() => setActiveTab("bank")}
+                className={`px-4 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${activeTab === 'bank' ? 'bg-[#1A1D20] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+              >
+                Payout Bank Details
+              </button>
             </div>
+          )}
 
-            {profileFeedback && (
-              <div className="bg-emerald-50 text-emerald-700 text-xs font-bold p-3 rounded-xl border border-emerald-100 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4" />
-                <span>{profileFeedback}</span>
-              </div>
+          {/* Form Card */}
+          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-6">
+            {activeTab === "profile" && (
+              <>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Personal & Profile Details</h3>
+                  <p className="text-xs text-gray-400 font-medium">Update your account email and contact telephone number.</p>
+                </div>
+
+                {profileFeedback && (
+                  <div className="bg-emerald-50 text-emerald-700 text-xs font-bold p-3 rounded-xl border border-emerald-100 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{profileFeedback}</span>
+                  </div>
+                )}
+
+                {profileError && (
+                  <div className="bg-red-50 text-red-600 text-xs font-bold p-3 rounded-xl border border-red-100 flex items-center gap-2">
+                    <XCircle className="w-4 h-4" />
+                    <span>{profileError}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleProfileSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Full Name</label>
+                      <input
+                        type="text"
+                        value={profileData.name}
+                        onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
+                        className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-xs focus:outline-none w-full font-bold text-gray-950 focus:border-brand-500"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Email Address</label>
+                      <input
+                        type="email"
+                        value={profileData.email}
+                        onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
+                        className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-xs focus:outline-none w-full font-bold text-gray-950 focus:border-brand-500"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Phone Number</label>
+                      <input
+                        type="text"
+                        value={profileData.phone}
+                        onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                        className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-xs focus:outline-none w-full font-bold text-gray-950 focus:border-brand-500"
+                        placeholder="e.g. +212600000000"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Account Type</label>
+                      <input
+                        type="text"
+                        value={profileData.role}
+                        disabled
+                        className="bg-gray-100 border border-gray-100 rounded-xl px-4 py-2.5 text-xs w-full font-bold text-gray-400 cursor-not-allowed uppercase tracking-wider"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={isSavingProfile}
+                      className="bg-[#1A1D20] hover:bg-zinc-800 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                    >
+                      {isSavingProfile ? "Saving Details..." : "Save Profile Details"}
+                    </button>
+                  </div>
+                </form>
+              </>
             )}
 
-            {profileError && (
-              <div className="bg-red-50 text-red-600 text-xs font-bold p-3 rounded-xl border border-red-100 flex items-center gap-2">
-                <XCircle className="w-4 h-4" />
-                <span>{profileError}</span>
-              </div>
+            {activeTab === "store" && (
+              <>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Store Customization Settings</h3>
+                  <p className="text-xs text-gray-400 font-medium">Update your public shop name, logo cover, and pickup warehouse address.</p>
+                </div>
+
+                {profileFeedback && (
+                  <div className="bg-emerald-50 text-emerald-700 text-xs font-bold p-3 rounded-xl border border-emerald-100 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{profileFeedback}</span>
+                  </div>
+                )}
+
+                {profileError && (
+                  <div className="bg-red-50 text-red-600 text-xs font-bold p-3 rounded-xl border border-red-100 flex items-center gap-2">
+                    <XCircle className="w-4 h-4" />
+                    <span>{profileError}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleProfileSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Store Logo URL</label>
+                      <input
+                        type="text"
+                        value={profileData.store_logo_url}
+                        onChange={(e) => setProfileData({ ...profileData, store_logo_url: e.target.value })}
+                        className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-xs focus:outline-none w-full font-bold text-gray-950 focus:border-brand-500"
+                        placeholder="https://example.com/logo.png"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Website URL</label>
+                      <input
+                        type="text"
+                        value={profileData.store_website}
+                        onChange={(e) => setProfileData({ ...profileData, store_website: e.target.value })}
+                        className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-xs focus:outline-none w-full font-bold text-gray-950 focus:border-brand-500"
+                        placeholder="https://my-store.com"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Store Description</label>
+                    <textarea
+                      value={profileData.store_description}
+                      onChange={(e) => setProfileData({ ...profileData, store_description: e.target.value })}
+                      rows={3}
+                      className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-xs focus:outline-none w-full font-bold text-gray-950 focus:border-brand-500"
+                      placeholder="Describe your store and products..."
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Business / Pickup Warehouse Address</label>
+                    <textarea
+                      value={profileData.store_address}
+                      onChange={(e) => setProfileData({ ...profileData, store_address: e.target.value })}
+                      rows={2}
+                      className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-xs focus:outline-none w-full font-bold text-gray-950 focus:border-brand-500"
+                      placeholder="Full street address for courier pickups"
+                    />
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={isSavingProfile}
+                      className="bg-[#1A1D20] hover:bg-zinc-800 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                    >
+                      {isSavingProfile ? "Saving Customization..." : "Save Store Customization"}
+                    </button>
+                  </div>
+                </form>
+              </>
             )}
 
-            <form onSubmit={handleProfileSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Store / Owner Name</label>
-                  <input
-                    type="text"
-                    value={profileData.name}
-                    onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
-                    className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-xs focus:outline-none w-full font-bold text-gray-950 focus:border-brand-500"
-                    required
-                  />
+            {activeTab === "bank" && (
+              <>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Payout Bank Details</h3>
+                  <p className="text-xs text-gray-400 font-medium">Provide your bank credentials to receive weekly COD balance settlements automatically.</p>
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Email Address</label>
-                  <input
-                    type="email"
-                    value={profileData.email}
-                    onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-                    className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-xs focus:outline-none w-full font-bold text-gray-950 focus:border-brand-500"
-                    required
-                  />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Phone Number</label>
-                  <input
-                    type="text"
-                    value={profileData.phone}
-                    onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                    className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-xs focus:outline-none w-full font-bold text-gray-950 focus:border-brand-500"
-                    placeholder="e.g. +212600000000"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Account Type</label>
-                  <input
-                    type="text"
-                    value={profileData.role}
-                    disabled
-                    className="bg-gray-100 border border-gray-100 rounded-xl px-4 py-2.5 text-xs w-full font-bold text-gray-400 cursor-not-allowed uppercase tracking-wider"
-                  />
-                </div>
-              </div>
+                {profileFeedback && (
+                  <div className="bg-emerald-50 text-emerald-700 text-xs font-bold p-3 rounded-xl border border-emerald-100 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{profileFeedback}</span>
+                  </div>
+                )}
 
-              <div className="pt-2 flex justify-end">
-                <button
-                  type="submit"
-                  disabled={isSavingProfile}
-                  className="bg-[#1A1D20] hover:bg-zinc-800 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
-                >
-                  {isSavingProfile ? "Saving Details..." : "Save Profile Details"}
-                </button>
-              </div>
-            </form>
+                {profileError && (
+                  <div className="bg-red-50 text-red-600 text-xs font-bold p-3 rounded-xl border border-red-100 flex items-center gap-2">
+                    <XCircle className="w-4 h-4" />
+                    <span>{profileError}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleProfileSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Bank Name</label>
+                      <input
+                        type="text"
+                        value={profileData.bank_name}
+                        onChange={(e) => setProfileData({ ...profileData, bank_name: e.target.value })}
+                        className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-xs focus:outline-none w-full font-bold text-gray-950 focus:border-brand-500"
+                        placeholder="e.g. CIH Bank, Attijariwafa Bank"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Account Holder Name</label>
+                      <input
+                        type="text"
+                        value={profileData.bank_holder_name}
+                        onChange={(e) => setProfileData({ ...profileData, bank_holder_name: e.target.value })}
+                        className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-xs focus:outline-none w-full font-bold text-gray-950 focus:border-brand-500"
+                        placeholder="Full Legal Name"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">RIB (24 Digits Account Number)</label>
+                    <input
+                      type="text"
+                      maxLength={24}
+                      value={profileData.bank_rib}
+                      onChange={(e) => setProfileData({ ...profileData, bank_rib: e.target.value.replace(/\D/g, '') })}
+                      className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-xs focus:outline-none w-full font-bold text-gray-950 focus:border-brand-500 tracking-wider"
+                      placeholder="012345678901234567890123"
+                    />
+                    <p className="text-[10px] text-gray-400 font-medium">Verify your 24 digit RIB carefully to avoid payment failure.</p>
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={isSavingProfile}
+                      className="bg-[#1A1D20] hover:bg-zinc-800 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                    >
+                      {isSavingProfile ? "Saving Payout Details..." : "Save Payout Details"}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
           </div>
 
           {/* Update Password Form */}

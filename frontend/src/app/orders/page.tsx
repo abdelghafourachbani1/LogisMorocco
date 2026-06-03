@@ -62,6 +62,40 @@ function getApiUrl(path: string): string {
   return `${host}${path}`;
 }
 
+function parseCSV(text: string): string[][] {
+  const lines: string[][] = [];
+  let row: string[] = [""];
+  let insideQuote = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+
+    if (char === '"') {
+      if (insideQuote && nextChar === '"') {
+        row[row.length - 1] += '"';
+        i++;
+      } else {
+        insideQuote = !insideQuote;
+      }
+    } else if (char === ',' && !insideQuote) {
+      row.push("");
+    } else if ((char === '\r' || char === '\n') && !insideQuote) {
+      if (char === '\r' && nextChar === '\n') {
+        i++;
+      }
+      lines.push(row);
+      row = [""];
+    } else {
+      row[row.length - 1] += char;
+    }
+  }
+  if (row.length > 1 || row[0] !== "") {
+    lines.push(row);
+  }
+  return lines;
+}
+
 export default function Orders() {
   const [userRole, setUserRole] = useState<string>("admin");
   const [orders, setOrders] = useState<OrderRow[]>([]);
@@ -84,6 +118,26 @@ export default function Orders() {
   const [amountCod, setAmountCod] = useState("");
   const [modalError, setModalError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Bulk Import Modal State
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importStep, setImportStep] = useState(1);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvRows, setCsvRows] = useState<string[][]>([]);
+  const [columnMapping, setColumnMapping] = useState({
+    customer_name: "",
+    customer_phone: "",
+    customer_address: "",
+    amount_cod: ""
+  });
+  const [previewData, setPreviewData] = useState<{
+    valid_count: number;
+    invalid_count: number;
+    valid_rows: any[];
+    invalid_rows: any[];
+  }>({ valid_count: 0, invalid_count: 0, valid_rows: [], invalid_rows: [] });
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState("");
 
   // Fetch user role
   const fetchUserRole = async () => {
@@ -187,6 +241,144 @@ export default function Orders() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // CSV File Upload handler
+  const handleCSVFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const parsed = parseCSV(text);
+      if (parsed.length === 0) {
+        setImportError("The CSV file is empty.");
+        return;
+      }
+
+      const headers = parsed[0].map(h => h.trim());
+      const dataRows = parsed.slice(1).filter(r => r.length > 0 && r.some(cell => cell.trim() !== ""));
+
+      setCsvHeaders(headers);
+      setCsvRows(dataRows);
+      setImportError("");
+
+      // Attempt to auto-map fields by name
+      const mapping = {
+        customer_name: "",
+        customer_phone: "",
+        customer_address: "",
+        amount_cod: ""
+      };
+
+      headers.forEach(header => {
+        const lower = header.toLowerCase();
+        if (lower.includes("name") || lower.includes("nom") || lower.includes("client")) {
+          mapping.customer_name = header;
+        } else if (lower.includes("phone") || lower.includes("tel") || lower.includes("mobile")) {
+          mapping.customer_phone = header;
+        } else if (lower.includes("address") || lower.includes("adresse") || lower.includes("destination") || lower.includes("ville") || lower.includes("city")) {
+          mapping.customer_address = header;
+        } else if (lower.includes("cod") || lower.includes("amount") || lower.includes("prix") || lower.includes("total")) {
+          mapping.amount_cod = header;
+        }
+      });
+
+      setColumnMapping(mapping);
+      setImportStep(2);
+    };
+    reader.readAsText(file);
+  };
+
+  // Submit mapping and get preview validation from server
+  const handleColumnMappingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setImportError("");
+    setIsImporting(true);
+
+    const nameIdx = csvHeaders.indexOf(columnMapping.customer_name);
+    const phoneIdx = csvHeaders.indexOf(columnMapping.customer_phone);
+    const addrIdx = csvHeaders.indexOf(columnMapping.customer_address);
+    const codIdx = csvHeaders.indexOf(columnMapping.amount_cod);
+
+    if (nameIdx === -1 || phoneIdx === -1 || addrIdx === -1 || codIdx === -1) {
+      setImportError("All fields must be mapped to proceed.");
+      setIsImporting(false);
+      return;
+    }
+
+    const payloadRows = csvRows.map(row => ({
+      customer_name: row[nameIdx]?.trim() || "",
+      customer_phone: row[phoneIdx]?.trim() || "",
+      customer_address: row[addrIdx]?.trim() || "",
+      amount_cod: row[codIdx]?.trim() || ""
+    }));
+
+    try {
+      const xsrfToken = getCookie("XSRF-TOKEN");
+      const res = await fetch(getApiUrl("/api/orders/import/preview"), {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {})
+        },
+        body: JSON.stringify({ rows: payloadRows }),
+        credentials: "include"
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setPreviewData(data);
+        setImportStep(3);
+      } else {
+        const data = await res.json();
+        setImportError(data.error || "Failed to process mapping preview.");
+      }
+    } catch (err) {
+      setImportError("Network error validating CSV rows.");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Perform the actual database import
+  const handleImportConfirm = async () => {
+    setImportError("");
+    setIsImporting(true);
+
+    if (previewData.valid_rows.length === 0) {
+      setImportError("There are no valid orders to import.");
+      setIsImporting(false);
+      return;
+    }
+
+    try {
+      const xsrfToken = getCookie("XSRF-TOKEN");
+      const res = await fetch(getApiUrl("/api/orders/import/confirm"), {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {})
+        },
+        body: JSON.stringify({ rows: previewData.valid_rows }),
+        credentials: "include"
+      });
+
+      if (res.ok) {
+        setImportStep(4);
+        fetchOrders(); // Refresh table
+      } else {
+        const data = await res.json();
+        setImportError(data.error || "Failed to complete import process.");
+      }
+    } catch (err) {
+      setImportError("Network error confirming import.");
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   useEffect(() => {
@@ -301,6 +493,19 @@ export default function Orders() {
         </div>
 
         <div className="flex items-center gap-3">
+          {userRole === "merchant" && (
+            <button 
+              onClick={() => {
+                setImportStep(1);
+                setImportError("");
+                setIsImportModalOpen(true);
+              }}
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Import CSV
+            </button>
+          )}
           <button 
             onClick={handleExportCSV}
             className="flex items-center gap-2 bg-[#1A1D20] hover:bg-zinc-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
@@ -718,6 +923,222 @@ export default function Orders() {
                 {isSubmitting ? "Creating Order..." : "Create Order"}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CSV Bulk Import Modal */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[28px] border border-gray-100 shadow-2xl p-8 max-w-lg w-full relative space-y-6">
+            <button 
+              onClick={() => setIsImportModalOpen(false)}
+              className="absolute right-6 top-6 text-gray-400 hover:text-gray-900 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="space-y-1">
+              <h3 className="text-xl font-black text-gray-900 tracking-tight">Bulk Import Orders</h3>
+              <p className="text-xs font-semibold text-gray-500">Upload a CSV file to import multiple shipments at once.</p>
+            </div>
+
+            {/* Steps indicator */}
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+              {[
+                { step: 1, label: "Upload File" },
+                { step: 2, label: "Map Columns" },
+                { step: 3, label: "Preview & Validate" },
+                { step: 4, label: "Import Complete" }
+              ].map((s) => (
+                <div key={s.step} className="flex items-center gap-2">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${
+                    importStep === s.step 
+                      ? "bg-brand-500 text-white shadow-sm" 
+                      : importStep > s.step 
+                        ? "bg-emerald-500 text-white" 
+                        : "bg-gray-100 text-gray-400"
+                  }`}>
+                    {s.step}
+                  </div>
+                  <span className={`text-[10px] font-bold hidden sm:inline ${
+                    importStep === s.step ? "text-gray-900" : "text-gray-400"
+                  }`}>
+                    {s.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {importError && (
+              <div className="bg-red-50 text-red-600 text-xs font-semibold px-4 py-3 rounded-xl border border-red-100 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{importError}</span>
+              </div>
+            )}
+
+            {/* STEP 1: Upload File */}
+            {importStep === 1 && (
+              <div className="space-y-5">
+                <div className="border-2 border-dashed border-gray-200 rounded-2xl p-8 flex flex-col items-center justify-center space-y-4 hover:border-brand-500 transition-colors">
+                  <div className="w-12 h-12 rounded-full bg-brand-50 flex items-center justify-center text-brand-500">
+                    <Sliders className="w-6 h-6 rotate-90" />
+                  </div>
+                  <div className="text-center space-y-1">
+                    <p className="text-sm font-bold text-gray-700">Select a CSV document</p>
+                    <p className="text-xs text-gray-400">Supported formats: .csv (comma-separated value)</p>
+                  </div>
+                  <label className="bg-[#1A1D20] hover:bg-zinc-800 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer">
+                    Browse Files
+                    <input 
+                      type="file" 
+                      accept=".csv" 
+                      onChange={handleCSVFileChange} 
+                      className="hidden" 
+                    />
+                  </label>
+                </div>
+
+                <div className="bg-gray-50 rounded-2xl p-4 flex items-center justify-between border border-gray-100">
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-bold text-gray-800">Need a sample template?</p>
+                    <p className="text-[10px] text-gray-400 font-medium">Download the standard CSV template schema.</p>
+                  </div>
+                  <a 
+                    href={getApiUrl("/api/orders/import/template")} 
+                    download
+                    className="flex items-center gap-1.5 border border-gray-200 hover:bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Template
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 2: Map Columns */}
+            {importStep === 2 && (
+              <form onSubmit={handleColumnMappingSubmit} className="space-y-4">
+                <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                  {[
+                    { key: "customer_name", label: "Customer Name" },
+                    { key: "customer_phone", label: "Customer Phone" },
+                    { key: "customer_address", label: "Customer Address" },
+                    { key: "amount_cod", label: "COD Amount (MAD)" }
+                  ].map((field) => (
+                    <div key={field.key} className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">
+                        {field.label}
+                      </label>
+                      <select
+                        value={columnMapping[field.key as keyof typeof columnMapping]}
+                        onChange={(e) => setColumnMapping({
+                          ...columnMapping,
+                          [field.key]: e.target.value
+                        })}
+                        required
+                        className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-xs focus:outline-none w-full font-bold text-gray-950 focus:border-brand-500"
+                      >
+                        <option value="">-- Choose CSV Column --</option>
+                        {csvHeaders.map(h => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="pt-2 flex items-center justify-between gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setImportStep(1)}
+                    className="w-1/2 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl py-3 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Back to Upload
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isImporting}
+                    className="w-1/2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl py-3 text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {isImporting ? "Processing..." : "Next: Preview Rows"}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* STEP 3: Preview & Validate */}
+            {importStep === 3 && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100/50 text-center">
+                    <p className="text-xl font-black text-emerald-600">{previewData.valid_count}</p>
+                    <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-wider mt-0.5">Valid Shipments</p>
+                  </div>
+                  <div className="bg-red-50 rounded-2xl p-4 border border-red-100/50 text-center">
+                    <p className="text-xl font-black text-red-500">{previewData.invalid_count}</p>
+                    <p className="text-[10px] text-red-400 font-bold uppercase tracking-wider mt-0.5">Validation Errors</p>
+                  </div>
+                </div>
+
+                {previewData.invalid_count > 0 && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-red-500 uppercase tracking-widest block">
+                      Validation Issues Detected
+                    </label>
+                    <div className="max-h-40 overflow-y-auto border border-red-100 rounded-xl p-3 bg-red-50/20 space-y-2 divide-y divide-red-100/50">
+                      {previewData.invalid_rows.map((row) => (
+                        <div key={row.index} className="text-[10px] font-medium pt-2 first:pt-0">
+                          <span className="font-bold text-red-600">Row {row.index + 2}: </span>
+                          <span className="text-gray-500">"{row.data.customer_name || 'Empty'}" - </span>
+                          <span className="text-red-500">{row.errors.join(", ")}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-2 flex items-center justify-between gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setImportStep(2)}
+                    className="w-1/2 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl py-3 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Back to Mapping
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleImportConfirm}
+                    disabled={isImporting || previewData.valid_count === 0}
+                    className="w-1/2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl py-3 text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {isImporting ? "Importing..." : `Import ${previewData.valid_count} Valid Orders`}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 4: Success / Done */}
+            {importStep === 4 && (
+              <div className="text-center py-6 space-y-5">
+                <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center mx-auto shadow-sm">
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-lg font-black text-gray-900">Import Process Complete!</h4>
+                  <p className="text-xs font-semibold text-gray-500">
+                    Your {previewData.valid_count} valid shipments have been added to the queue.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsImportModalOpen(false)}
+                  className="w-full bg-[#1A1D20] hover:bg-zinc-800 text-white rounded-xl py-3 text-xs font-bold transition-all cursor-pointer"
+                >
+                  Return to Dashboard
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
