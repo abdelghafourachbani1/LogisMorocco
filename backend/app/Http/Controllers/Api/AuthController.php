@@ -22,7 +22,10 @@ class AuthController extends Controller
             'phone' => ['nullable', 'string', 'max:20'],
             'role' => ['required', 'string', 'in:admin,merchant,livreur'],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
-        ]);
+
+            'vehicle_type' => ['required_if:role,livreur','string','max:10'],
+            'vehicle_number' => ['required_if:role,livreur','numeric'],
+        ]); 
 
         $user = User::create([
             'name' => $request->name,
