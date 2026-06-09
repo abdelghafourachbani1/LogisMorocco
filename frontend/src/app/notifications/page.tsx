@@ -1,31 +1,16 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { 
   Bell, 
-  CheckCheck, 
-  Clock, 
-  MailOpen, 
-  Trash,
-  ShoppingBag,
-  CheckCircle2,
-  XCircle,
-  Truck
+  Send, 
+  CheckCircle, 
+  AlertCircle, 
+  Users, 
+  Megaphone, 
+  MessageSquare,
+  Sparkles
 } from "lucide-react";
-import Link from "next/link";
-
-interface NotificationItem {
-  id: string;
-  type: string;
-  data: {
-    order_id?: number;
-    tracking_number?: string;
-    status?: string;
-    message?: string;
-  };
-  read_at: string | null;
-  created_at: string;
-}
 
 function getCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
@@ -45,189 +30,169 @@ function getApiUrl(path: string): string {
   return `${host}${path}`;
 }
 
-export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState("");
+export default function NotificationsBroadcast() {
+  const [target, setTarget] = useState("all");
+  const [title, setTitle] = useState("");
+  const [message, setMessage] = useState("");
+  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
-  const fetchNotifications = async () => {
+  const handleBroadcast = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
     try {
-      const res = await fetch(getApiUrl("/api/notifications"), {
-        headers: { "Accept": "application/json" },
+      const xsrfToken = getCookie("XSRF-TOKEN");
+      const res = await fetch(getApiUrl("/api/admin/announcements"), {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {})
+        },
+        body: JSON.stringify({ target, title, message }),
         credentials: "include"
       });
 
+      const data = await res.json();
+
       if (res.ok) {
-        const data = await res.json();
-        setNotifications(data.notifications || []);
-        setUnreadCount(data.unread_count || 0);
+        setSuccessMessage(data.message || "Announcement successfully broadcasted!");
+        setTitle("");
+        setMessage("");
       } else {
-        setErrorMsg("Failed to retrieve notifications.");
+        setErrorMessage(data.message || "Failed to dispatch system announcement.");
       }
     } catch (err) {
-      console.error(err);
-      setErrorMsg("Network error connecting to notification service.");
+      setErrorMessage("Network error, please try again.");
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
-
-  useEffect(() => {
-    fetchNotifications();
-  }, []);
-
-  const handleMarkAllAsRead = async () => {
-    try {
-      const xsrfToken = getCookie("XSRF-TOKEN");
-      const res = await fetch(getApiUrl("/api/notifications/read"), {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {})
-        },
-        credentials: "include"
-      });
-
-      if (res.ok) {
-        fetchNotifications();
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleMarkAsRead = async (id: string) => {
-    try {
-      const xsrfToken = getCookie("XSRF-TOKEN");
-      const res = await fetch(getApiUrl(`/api/notifications/${id}/read`), {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {})
-        },
-        credentials: "include"
-      });
-
-      if (res.ok) {
-        fetchNotifications();
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const getStatusIcon = (status?: string) => {
-    switch (status) {
-      case "delivered":
-        return <CheckCircle2 className="w-5 h-5 text-green-500" />;
-      case "cancelled":
-      case "refused":
-      case "returned":
-        return <XCircle className="w-5 h-5 text-red-500" />;
-      case "in_transit":
-        return <Truck className="w-5 h-5 text-brand-500" />;
-      default:
-        return <ShoppingBag className="w-5 h-5 text-gray-500" />;
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-[80vh] flex items-center justify-center font-bold text-gray-400 text-sm">
-        Loading real-time status notifications...
-      </div>
-    );
-  }
 
   return (
-    <div className="p-8 space-y-8 max-w-4xl mx-auto min-h-screen">
-      
-      {/* Top Header Row */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight flex items-center gap-3">
-            Notifications Center
-            {unreadCount > 0 && (
-              <span className="text-xs font-black text-white bg-brand-500 px-2.5 py-1 rounded-full animate-bounce">
-                {unreadCount} new
-              </span>
-            )}
-          </h2>
-          <p className="text-gray-500 text-sm font-semibold">
-            Track immediate updates regarding order dispatching, driver pick ups, and successful payouts.
-          </p>
-        </div>
-
-        {unreadCount > 0 && (
-          <button 
-            onClick={handleMarkAllAsRead}
-            className="flex items-center gap-2 bg-[#1A1D20] hover:bg-zinc-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap"
-          >
-            <CheckCheck className="w-4 h-4" />
-            Mark all as read
-          </button>
-        )}
+    <div className="p-8 space-y-6 max-w-4xl mx-auto">
+      {/* Header */}
+      <div>
+        <span className="bg-pink-50 text-brand-500 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full flex items-center gap-1.5 w-max">
+          <Megaphone className="w-3.5 h-3.5" /> Broadcast Center
+        </span>
+        <h2 className="text-2xl font-black text-gray-900 tracking-tight mt-1">Platform Announcements</h2>
+        <p className="text-xs font-semibold text-gray-500">Dispatch push notifications and alerts to all registered merchants and drivers.</p>
       </div>
 
-      {errorMsg && (
-        <div className="bg-red-50 text-red-600 text-xs font-bold px-4 py-3 rounded-xl border border-red-100">
-          {errorMsg}
-        </div>
-      )}
-
-      {/* Notifications List */}
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">
-        {notifications.length === 0 ? (
-          <div className="text-center py-16 text-gray-400 space-y-3">
-            <Bell className="w-10 h-10 mx-auto text-gray-200" />
-            <p className="text-xs font-bold">No updates or alerts found.</p>
+      {/* Main Container */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Form panel */}
+        <div className="md:col-span-2 bg-white rounded-[28px] border border-gray-100 p-8 space-y-6 shadow-sm">
+          <div className="border-b border-gray-55 pb-4">
+            <h4 className="text-sm font-black text-gray-900 tracking-tight uppercase">Compose Announcement</h4>
+            <p className="text-[10px] text-gray-400 font-bold mt-0.5">Define target audience and details of the alert broadcast.</p>
           </div>
-        ) : (
-          notifications.map(item => (
-            <div 
-              key={item.id} 
-              className={`p-5 flex items-start gap-4 transition-colors ${
-                item.read_at ? "bg-white" : "bg-brand-50/10 hover:bg-brand-50/20"
-              }`}
-            >
-              {/* Status / Activity Indicator Icon */}
-              <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0 border border-gray-100">
-                {getStatusIcon(item.data.status)}
-              </div>
 
-              {/* Message Details */}
-              <div className="flex-1 space-y-1.5 min-w-0">
-                <p className={`text-xs ${item.read_at ? "text-gray-600 font-semibold" : "text-gray-900 font-black"}`}>
-                  {item.data.message || "Order status notification."}
-                </p>
-                
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-gray-400 font-bold">
-                  {item.data.tracking_number && (
-                    <span className="text-brand-500">Tracking: {item.data.tracking_number}</span>
-                  )}
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {new Date(item.created_at).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-
-              {/* Action Button: Mark Single as Read */}
-              {!item.read_at && (
-                <button 
-                  onClick={() => handleMarkAsRead(item.id)}
-                  title="Mark as read"
-                  className="text-gray-400 hover:text-brand-500 transition-colors p-1.5 rounded-lg hover:bg-gray-50"
-                >
-                  <MailOpen className="w-4 h-4" />
-                </button>
-              )}
+          {errorMessage && (
+            <div className="bg-red-50 text-red-600 text-xs font-bold px-4 py-3 rounded-2xl border border-red-100 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" />
+              <span>{errorMessage}</span>
             </div>
-          ))
-        )}
-      </div>
+          )}
 
+          {successMessage && (
+            <div className="bg-emerald-50 text-emerald-600 text-xs font-bold px-4 py-3 rounded-2xl border border-emerald-100/50 flex items-center gap-2">
+              <CheckCircle className="w-4 h-4" />
+              <span>{successMessage}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleBroadcast} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Target Audience</label>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { value: "all", label: "Everyone", desc: "All users" },
+                  { value: "merchants", label: "Merchants", desc: "Sellers only" },
+                  { value: "drivers", label: "Drivers", desc: "Couriers only" }
+                ].map((aud) => (
+                  <button
+                    key={aud.value}
+                    type="button"
+                    onClick={() => setTarget(aud.value)}
+                    className={`border p-3 rounded-2xl text-left transition-all ${
+                      target === aud.value 
+                        ? "border-brand-500 bg-pink-50/20 text-gray-900" 
+                        : "border-gray-100 hover:bg-gray-50 text-gray-500"
+                    }`}
+                  >
+                    <p className="text-xs font-extrabold">{aud.label}</p>
+                    <span className="text-[9px] font-medium text-gray-400 mt-0.5 block">{aud.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Alert Title</label>
+              <input
+                type="text"
+                required
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Scheduled System Maintenance"
+                className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-xs focus:outline-none font-bold text-gray-900 focus:border-brand-500"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Message Details</label>
+              <textarea
+                required
+                rows={5}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Write message content here..."
+                className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-xs focus:outline-none font-medium text-gray-950 focus:border-brand-500 resize-none"
+              />
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="bg-[#1A1D20] hover:bg-zinc-800 text-white rounded-xl px-6 py-2.5 text-xs font-bold transition-all flex items-center gap-2"
+              >
+                <Send className="w-3.5 h-3.5" /> {isSubmitting ? "Dispatching alert..." : "Dispatch Broadcast"}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Sidebar help / tips */}
+        <div className="bg-gray-50/40 border border-gray-100 rounded-[28px] p-6 space-y-6">
+          <div>
+            <h4 className="text-xs font-black text-gray-900 tracking-tight uppercase">Broadcast Guidelines</h4>
+            <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Important notices for dispatchers.</p>
+          </div>
+
+          <div className="space-y-4 text-xs font-medium text-gray-600 leading-relaxed">
+            <div className="flex gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0 mt-1.5" />
+              <p>Announcements are delivered immediately to user dashboard notification feeds.</p>
+            </div>
+            <div className="flex gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0 mt-1.5" />
+              <p>Please double-check titles and messaging details before pressing dispatch.</p>
+            </div>
+            <div className="flex gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0 mt-1.5" />
+              <p>Avoid excessive broadcasting to prevent user notification fatigue.</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

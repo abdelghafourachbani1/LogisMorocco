@@ -70,6 +70,15 @@ export default function Sidebar() {
     }`;
   };
 
+  const getSubLinkClass = (path: string) => {
+    const isActive = pathname === path;
+    return `flex items-center gap-2 pl-3 py-1.5 rounded-lg text-[11px] font-bold transition-all duration-200 ${
+      isActive
+        ? "text-brand-500 font-extrabold border-l-2 border-brand-500 pl-2 bg-pink-50/30"
+        : "text-gray-500 hover:text-gray-955 font-semibold"
+    }`;
+  };
+
   if (role === "livreur") {
     return (
       <aside className="w-64 bg-white border-r border-gray-100 flex flex-col justify-between h-screen flex-shrink-0 z-30 shadow-[4px_0_24px_rgba(0,0,0,0.01)]">
@@ -245,51 +254,128 @@ export default function Sidebar() {
   // Fallback: Admin Sidebar View
   return (
     <aside className="w-64 bg-white border-r border-gray-100 flex flex-col justify-between h-screen flex-shrink-0 z-30 shadow-[4px_0_24px_rgba(0,0,0,0.01)]">
-      <div>
+      <div className="overflow-y-auto flex-1 scrollbar-thin">
         {/* Logo */}
-        <div className="h-[72px] flex items-center px-6 border-b border-gray-100 gap-3">
+        <div className="h-[72px] flex items-center px-6 border-b border-gray-100 gap-3 bg-white sticky top-0 z-10">
           <div className="w-8 h-8 rounded-xl bg-brand-500 flex items-center justify-center text-white font-black text-base">
             L
           </div>
           <div>
             <h1 className="font-extrabold text-gray-900 tracking-tight leading-none text-sm">LogiMorocco</h1>
-            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none mt-1 block">Admin Console</span>
+            <span className="text-[9px] font-bold text-brand-500 uppercase tracking-widest leading-none mt-1 block">Admin Console</span>
           </div>
         </div>
 
         {/* Navigation Menu */}
-        <nav className="p-4 space-y-1.5">
+        <div className="p-4 space-y-4">
+          {/* Dashboard */}
           <Link href="/dashboard" className={getLinkClass("/dashboard")}>
             <Layout className="w-4 h-4" />
             Dashboard
           </Link>
-          <Link href="/orders" className={getLinkClass("/orders")}>
-            <ShoppingBag className="w-4 h-4" />
-            Orders
-          </Link>
-          <Link href="/products" className={getLinkClass("/products")}>
-            <Layers className="w-4 h-4" />
-            Inventory
-          </Link>
-          <Link href="/drivers" className={getLinkClass("/drivers")}>
-            <Truck className="w-4 h-4" />
-            Drivers
-          </Link>
-          <Link href="/merchants" className={getLinkClass("/merchants")}>
-            <Users className="w-4 h-4" />
-            Merchants
-          </Link>
-          <Link href="/analytics" className={getLinkClass("/analytics")}>
-            <BarChart3 className="w-4 h-4" />
-            Analytics
-          </Link>
-        </nav>
-      </div>
 
-      {/* Bottom Sidebar */}
-      <div className="p-4 space-y-4">
-        <div className="space-y-1.5 pt-2 border-t border-gray-100">
-          <Link href="/profile" className={getLinkClass("/profile")}>
+          {/* Users */}
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 px-4 py-1">
+              <Users className="w-4 h-4 text-gray-400" />
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Users</span>
+            </div>
+            <div className="pl-3 space-y-0.5 border-l border-gray-150 ml-6">
+              <Link href="/merchants" className={getSubLinkClass("/merchants")}>
+                Merchants
+              </Link>
+              <Link href="/drivers" className={getSubLinkClass("/drivers")}>
+                Drivers
+              </Link>
+            </div>
+          </div>
+
+          {/* Orders */}
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 px-4 py-1">
+              <ShoppingBag className="w-4 h-4 text-gray-400" />
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Orders</span>
+            </div>
+            <div className="pl-3 space-y-0.5 border-l border-gray-150 ml-6">
+              <Link href="/orders" className={getSubLinkClass("/orders")}>
+                All Orders
+              </Link>
+              <Link href="/delivery-monitoring" className={getSubLinkClass("/delivery-monitoring")}>
+                Delivery Monitoring
+              </Link>
+            </div>
+          </div>
+
+          {/* Finance */}
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 px-4 py-1">
+              <CreditCard className="w-4 h-4 text-gray-400" />
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Finance</span>
+            </div>
+            <div className="pl-3 space-y-0.5 border-l border-gray-150 ml-6">
+              <Link href="/finance/merchants" className={getSubLinkClass("/finance/merchants")}>
+                Merchant Wallets
+              </Link>
+              <Link href="/finance/drivers" className={getSubLinkClass("/finance/drivers")}>
+                Driver Wallets
+              </Link>
+              <Link href="/finance/revenue" className={getSubLinkClass("/finance/revenue")}>
+                Platform Revenue
+              </Link>
+              <Link href="/finance/withdrawals" className={getSubLinkClass("/finance/withdrawals")}>
+                Withdrawals
+              </Link>
+            </div>
+          </div>
+
+          {/* Reports */}
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 px-4 py-1">
+              <FileText className="w-4 h-4 text-gray-400" />
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Reports</span>
+            </div>
+            <div className="pl-3 space-y-0.5 border-l border-gray-150 ml-6">
+              <Link href="/reports/orders" className={getSubLinkClass("/reports/orders")}>
+                Orders Reports
+              </Link>
+              <Link href="/reports/revenue" className={getSubLinkClass("/reports/revenue")}>
+                Revenue Reports
+              </Link>
+              <Link href="/reports/drivers" className={getSubLinkClass("/reports/drivers")}>
+                Drivers Reports
+              </Link>
+              <Link href="/reports/merchants" className={getSubLinkClass("/reports/merchants")}>
+                Merchants Reports
+              </Link>
+            </div>
+          </div>
+
+          {/* Complaints */}
+          <Link href="/complaints" className={getLinkClass("/complaints")}>
+            <HelpCircle className="w-4 h-4" />
+            Complaints
+          </Link>
+
+          {/* Notifications */}
+          <Link href="/notifications" className={getLinkClass("/notifications")}>
+            <Bell className="w-4 h-4" />
+            Notifications
+          </Link>
+
+          {/* Integrations */}
+          <Link href="/integrations" className={getLinkClass("/integrations")}>
+            <Terminal className="w-4 h-4" />
+            Integrations
+          </Link>
+
+          {/* Audit Logs */}
+          <Link href="/audit-logs" className={getLinkClass("/audit-logs")}>
+            <Activity className="w-4 h-4" />
+            Audit Logs
+          </Link>
+
+          {/* Settings */}
+          <Link href="/settings" className={getLinkClass("/settings")}>
             <Settings className="w-4 h-4" />
             Settings
           </Link>

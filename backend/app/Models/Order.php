@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'merchant_id', 'livreur_id', 'tracking_number', 
     'customer_name', 'customer_phone', 'customer_address', 
     'amount_cod', 'status', 'delivery_fee', 'delivery_notes', 
-    'failure_reason', 'status_history'
+    'failure_reason', 'status_history', 'admin_notes'
 ])]
 class Order extends Model
 {

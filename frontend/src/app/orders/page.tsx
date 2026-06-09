@@ -29,8 +29,10 @@ interface OrderRow {
   amount_cod: number;
   status: string;
   created_at: string;
-  merchant?: { name: string } | null;
-  livreur?: { name: string } | null;
+  merchant?: { name: string; email?: string } | null;
+  livreur?: { name: string; phone?: string | null } | null;
+  livreur_id?: number | null;
+  admin_notes?: string | null;
 }
 
 interface DashboardStats {
@@ -96,6 +98,8 @@ function parseCSV(text: string): string[][] {
   return lines;
 }
 
+const CITIES = ["Casablanca", "Rabat", "Marrakech", "Agadir", "Tangier", "Fez", "Oujda", "Meknes"];
+
 export default function Orders() {
   const [userRole, setUserRole] = useState<string>("admin");
   const [orders, setOrders] = useState<OrderRow[]>([]);
@@ -105,10 +109,17 @@ export default function Orders() {
   const [activeTab, setActiveTab] = useState<string>("All"); // Livreur: "available", "active"
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [cityFilter, setCityFilter] = useState("All");
+  const [merchantFilter, setMerchantFilter] = useState("All");
+  const [driverFilter, setDriverFilter] = useState("All");
   const [currentPage, setCurrentPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
   const [totalEntries, setTotalEntries] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Lists for Filters
+  const [merchantsList, setMerchantsList] = useState<any[]>([]);
+  const [driversList, setDriversList] = useState<any[]>([]);
 
   // Create Order Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -138,6 +149,83 @@ export default function Orders() {
   }>({ valid_count: 0, invalid_count: 0, valid_rows: [], invalid_rows: [] });
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState("");
+
+  const [selectedOrder, setSelectedOrder] = useState<OrderRow | null>(null);
+
+  // Internal Notes State
+  const [internalNote, setInternalNote] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+
+  useEffect(() => {
+    if (selectedOrder) {
+      setInternalNote(selectedOrder.admin_notes || "");
+    } else {
+      setInternalNote("");
+    }
+  }, [selectedOrder]);
+
+  const handleSaveInternalNotes = async () => {
+    if (!selectedOrder) return;
+    setSavingNote(true);
+    try {
+      const xsrfToken = getCookie("XSRF-TOKEN");
+      const res = await fetch(getApiUrl(`/api/admin/orders/${selectedOrder.id}/notes`), {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {})
+        },
+        body: JSON.stringify({ notes: internalNote }),
+        credentials: "include"
+      });
+      if (res.ok) {
+        setSelectedOrder(prev => prev ? { ...prev, admin_notes: internalNote } : null);
+        fetchOrders();
+      }
+    } catch (err) {
+      console.error("Failed to update notes:", err);
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const fetchFilterLists = async () => {
+    try {
+      // Drivers
+      const driversRes = await fetch(getApiUrl("/api/admin/users?role=livreur"), {
+        headers: { "Accept": "application/json" },
+        credentials: "include"
+      });
+      if (driversRes.ok) {
+        const dData = await driversRes.json();
+        setDriversList(dData.users || []);
+      }
+
+      // Merchants
+      const merchantsRes = await fetch(getApiUrl("/api/admin/users?role=merchant"), {
+        headers: { "Accept": "application/json" },
+        credentials: "include"
+      });
+      if (merchantsRes.ok) {
+        const mData = await merchantsRes.json();
+        setMerchantsList(mData.users || []);
+      }
+    } catch (err) {
+      console.error("Failed to load filter lists:", err);
+    }
+  };
+
+  const fetchDriversList = async () => {
+    await fetchFilterLists();
+  };
+
+  useEffect(() => {
+    if (selectedOrder && userRole === "admin") {
+      fetchFilterLists();
+    }
+  }, [selectedOrder, userRole]);
+
 
   // Fetch user role
   const fetchUserRole = async () => {
@@ -193,6 +281,17 @@ export default function Orders() {
         if (statusFilter !== "All") {
           queryParams.append("status", statusFilter);
         }
+        if (userRole === "admin") {
+          if (cityFilter && cityFilter !== "All") {
+            queryParams.append("city", cityFilter);
+          }
+          if (merchantFilter && merchantFilter !== "All") {
+            queryParams.append("merchant_id", merchantFilter);
+          }
+          if (driverFilter && driverFilter !== "All") {
+            queryParams.append("livreur_id", driverFilter);
+          }
+        }
       }
 
       const res = await fetch(getApiUrl(`/api/orders?${queryParams.toString()}`), {
@@ -217,7 +316,6 @@ export default function Orders() {
   };
 
   // Selected Order for Details Drawer
-  const [selectedOrder, setSelectedOrder] = useState<OrderRow | null>(null);
 
   // Export to CSV Function
   const handleExportCSV = () => {
@@ -388,7 +486,7 @@ export default function Orders() {
 
   useEffect(() => {
     fetchOrders();
-  }, [userRole, activeTab, search, statusFilter, currentPage]);
+  }, [userRole, activeTab, search, statusFilter, cityFilter, merchantFilter, driverFilter, currentPage]);
 
   // Create Order Handler
   const handleCreateOrder = async (e: React.FormEvent) => {
@@ -477,6 +575,55 @@ export default function Orders() {
       }
     } catch (err) {
       console.error("Error updating status:", err);
+    }
+  };
+
+  // Reassign Driver (Admin action)
+  const handleReassignDriver = async (orderId: number, driverId: number) => {
+    try {
+      const xsrfToken = getCookie("XSRF-TOKEN");
+      const res = await fetch(getApiUrl(`/api/admin/orders/${orderId}/reassign`), {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {})
+        },
+        body: JSON.stringify({ livreur_id: driverId }),
+        credentials: "include"
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        fetchOrders();
+        fetchDashboardStats();
+        setSelectedOrder(prev => prev ? { ...prev, status: "in_transit", livreur: data.order.livreur } : null);
+      }
+    } catch (err) {
+      console.error("Error reassigning driver:", err);
+    }
+  };
+
+  // Cancel Order (Admin action)
+  const handleCancelOrder = async (orderId: number) => {
+    try {
+      const xsrfToken = getCookie("XSRF-TOKEN");
+      const res = await fetch(getApiUrl(`/api/admin/orders/${orderId}/cancel`), {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {})
+        },
+        credentials: "include"
+      });
+
+      if (res.ok) {
+        fetchOrders();
+        fetchDashboardStats();
+        setSelectedOrder(prev => prev ? { ...prev, status: "canceled" } : null);
+      }
+    } catch (err) {
+      console.error("Error cancelling order:", err);
     }
   };
 
@@ -666,6 +813,72 @@ export default function Orders() {
             </div>
           </div>
         </div>
+
+        {userRole === "admin" && (
+          <div className="px-6 py-4 bg-gray-50/50 border-b border-gray-100/60 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            {/* City Filter */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">City Coverage</label>
+              <select
+                value={cityFilter}
+                onChange={(e) => { setCityFilter(e.target.value); setCurrentPage(1); }}
+                className="w-full bg-white border border-gray-100 rounded-xl px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                <option value="All">All Cities</option>
+                {CITIES.map(city => (
+                  <option key={city} value={city}>{city}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Merchant Filter */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Merchant Partner</label>
+              <select
+                value={merchantFilter}
+                onChange={(e) => { setMerchantFilter(e.target.value); setCurrentPage(1); }}
+                className="w-full bg-white border border-gray-100 rounded-xl px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                <option value="All">All Merchants</option>
+                {merchantsList.map(merchant => (
+                  <option key={merchant.id} value={merchant.id}>{merchant.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Driver Filter */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Allocated Driver</label>
+              <select
+                value={driverFilter}
+                onChange={(e) => { setDriverFilter(e.target.value); setCurrentPage(1); }}
+                className="w-full bg-white border border-gray-100 rounded-xl px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                <option value="All">All Drivers</option>
+                {driversList.map(driver => (
+                  <option key={driver.id} value={driver.id}>{driver.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Status Dropdown */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Order Status</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+                className="w-full bg-white border border-gray-100 rounded-xl px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                <option value="All">All Statuses</option>
+                <option value="pending">Pending Dispatch</option>
+                <option value="in_transit">Out for Delivery</option>
+                <option value="delivered">Delivered</option>
+                <option value="refused">Returns (RTO)</option>
+                <option value="canceled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+        )}
 
         {/* Orders Table */}
         <div className="overflow-x-auto">
@@ -1239,6 +1452,89 @@ export default function Orders() {
                 </div>
               </div>
             </div>
+
+            {userRole === "admin" && selectedOrder.merchant && (
+              <div className="space-y-3 pt-3 border-t border-gray-100">
+                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Merchant Details</h4>
+                <div className="space-y-2 text-xs font-semibold text-gray-700">
+                  <div className="flex justify-between border-b border-gray-50 pb-2">
+                    <span className="text-gray-400">Business Name</span>
+                    <span className="text-gray-900 font-bold">{selectedOrder.merchant.name}</span>
+                  </div>
+                  <div className="flex justify-between pb-2">
+                    <span className="text-gray-400">Email Address</span>
+                    <span className="text-gray-900 font-bold">{selectedOrder.merchant.email}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {userRole === "admin" && (
+              <div className="space-y-3 pt-3 border-t border-gray-100">
+                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Courier Assignment</h4>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-400">Assigned Driver</span>
+                    <span className="text-xs font-bold text-gray-900">
+                      {selectedOrder.livreur ? selectedOrder.livreur.name : "Unassigned"}
+                    </span>
+                  </div>
+                  <select
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        handleReassignDriver(selectedOrder.id, Number(e.target.value));
+                      }
+                    }}
+                    value={selectedOrder.livreur_id || ""}
+                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-xs focus:outline-none font-bold text-gray-900 focus:border-brand-500"
+                  >
+                    <option value="">-- Reassign Driver --</option>
+                    {driversList.map((driver) => (
+                      <option key={driver.id} value={driver.id}>
+                        {driver.name} ({driver.status})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {userRole === "admin" && (
+              <div className="space-y-3 pt-3 border-t border-gray-100">
+                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Internal Admin Notes</h4>
+                <div className="space-y-2">
+                  <textarea
+                    value={internalNote}
+                    onChange={(e) => setInternalNote(e.target.value)}
+                    placeholder="Add internal notes about payment, delivery instructions, issues..."
+                    rows={3}
+                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-500 placeholder-gray-400"
+                  />
+                  <button
+                    onClick={handleSaveInternalNotes}
+                    disabled={savingNote}
+                    className="w-full bg-zinc-950 hover:bg-zinc-900 text-white rounded-xl py-2.5 text-xs font-bold transition-all flex items-center justify-center gap-2"
+                  >
+                    {savingNote ? "Saving Notes..." : "Save Notes"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {userRole === "admin" && selectedOrder.status !== "delivered" && selectedOrder.status !== "canceled" && (
+              <div className="pt-2">
+                <button
+                  onClick={() => {
+                    if (confirm("Are you sure you want to cancel this order?")) {
+                      handleCancelOrder(selectedOrder.id);
+                    }
+                  }}
+                  className="w-full bg-red-50 hover:bg-red-100 text-red-600 rounded-xl py-3 text-xs font-bold transition-all flex items-center justify-center gap-2"
+                >
+                  Cancel Order
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

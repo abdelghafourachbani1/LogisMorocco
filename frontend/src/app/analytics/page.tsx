@@ -27,15 +27,76 @@ import {
   Legend 
 } from "recharts";
 
-const chartData = [
-  { day: "Mon", "Incoming Orders": 18, "Deliveries": 12 },
-  { day: "Tue", "Incoming Orders": 21, "Deliveries": 14 },
-  { day: "Wed", "Incoming Orders": 24, "Deliveries": 16 },
-  { day: "Thu", "Incoming Orders": 22, "Deliveries": 15 },
-  { day: "Fri", "Incoming Orders": 25, "Deliveries": 17 },
-  { day: "Sat", "Incoming Orders": 19, "Deliveries": 13 },
-  { day: "Sun", "Incoming Orders": 23, "Deliveries": 18 },
-];
+const datasets = {
+  "7days": {
+    label: "Last 7 Days",
+    deliverySuccessRate: "95.6%",
+    successRateTrend: "+1.8%",
+    successRateTrendUp: true,
+    avgDeliveryTime: "18 hours",
+    deliveryTimeTrend: "-12%",
+    deliveryTimeTrendUp: false,
+    cancellationRate: "2.8%",
+    cancellationTrend: "-0.5%",
+    cancellationTrendUp: false,
+    merchantCod: "15,200 MAD",
+    adminCod: "280K MAD",
+    codTrend: "+15%",
+    codTrendUp: true,
+    chartData: [
+      { period: "Mon", "Incoming Orders": 12, "Deliveries": 10 },
+      { period: "Tue", "Incoming Orders": 15, "Deliveries": 13 },
+      { period: "Wed", "Incoming Orders": 18, "Deliveries": 15 },
+      { period: "Thu", "Incoming Orders": 16, "Deliveries": 14 },
+      { period: "Fri", "Incoming Orders": 20, "Deliveries": 18 },
+      { period: "Sat", "Incoming Orders": 11, "Deliveries": 10 },
+      { period: "Sun", "Incoming Orders": 14, "Deliveries": 12 },
+    ]
+  },
+  "30days": {
+    label: "Last 30 Days",
+    deliverySuccessRate: "94.2%",
+    successRateTrend: "+1.5%",
+    successRateTrendUp: true,
+    avgDeliveryTime: "24 hours",
+    deliveryTimeTrend: "-5%",
+    deliveryTimeTrendUp: false,
+    cancellationRate: "3.8%",
+    cancellationTrend: "-0.2%",
+    cancellationTrendUp: false,
+    merchantCod: "45,200 MAD",
+    adminCod: "1.2M MAD",
+    codTrend: "+12%",
+    codTrendUp: true,
+    chartData: [
+      { period: "Week 1", "Incoming Orders": 65, "Deliveries": 52 },
+      { period: "Week 2", "Incoming Orders": 72, "Deliveries": 58 },
+      { period: "Week 3", "Incoming Orders": 80, "Deliveries": 64 },
+      { period: "Week 4", "Incoming Orders": 75, "Deliveries": 61 },
+    ]
+  },
+  "90days": {
+    label: "Last 90 Days",
+    deliverySuccessRate: "93.1%",
+    successRateTrend: "+2.1%",
+    successRateTrendUp: true,
+    avgDeliveryTime: "28 hours",
+    deliveryTimeTrend: "-3%",
+    deliveryTimeTrendUp: false,
+    cancellationRate: "4.1%",
+    cancellationTrend: "+0.1%",
+    cancellationTrendUp: true,
+    merchantCod: "148,000 MAD",
+    adminCod: "3.8M MAD",
+    codTrend: "+18%",
+    codTrendUp: true,
+    chartData: [
+      { period: "Month 1", "Incoming Orders": 210, "Deliveries": 178 },
+      { period: "Month 2", "Incoming Orders": 235, "Deliveries": 192 },
+      { period: "Month 3", "Incoming Orders": 260, "Deliveries": 215 },
+    ]
+  }
+};
 
 function getApiUrl(path: string): string {
   const host = typeof window !== "undefined" && window.location.hostname === "localhost"
@@ -47,6 +108,8 @@ function getApiUrl(path: string): string {
 export default function AnalyticsPage() {
   const [mounted, setMounted] = useState(false);
   const [userRole, setUserRole] = useState<string>("admin");
+  const [timeframe, setTimeframe] = useState<"7days" | "30days" | "90days">("30days");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const fetchUserRole = async () => {
     try {
@@ -68,6 +131,41 @@ export default function AnalyticsPage() {
     fetchUserRole();
   }, []);
 
+  const getTrendNode = (trend: string, isPositiveGood: boolean, isUp: boolean) => {
+    const isGood = isPositiveGood ? isUp : !isUp;
+    const colorClass = isGood ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50";
+    const Icon = isUp ? TrendingUp : TrendingDown;
+    return (
+      <div className={`flex items-center gap-1 text-[11px] font-extrabold ${colorClass} px-2 py-0.5 rounded-full`}>
+        <Icon className="w-3 h-3" />
+        {trend}
+      </div>
+    );
+  };
+
+  const exportData = () => {
+    const current = datasets[timeframe];
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Metric,Value,Trend\n";
+    csvContent += `Delivery Success Rate,${current.deliverySuccessRate},${current.successRateTrend}\n`;
+    csvContent += `Avg. Delivery Time,${current.avgDeliveryTime},${current.deliveryTimeTrend}\n`;
+    csvContent += `Cancellation/Return Rate,${current.cancellationRate},${current.cancellationTrend}\n`;
+    csvContent += `Total COD Reconciled,${userRole === "merchant" ? current.merchantCod : current.adminCod},${current.codTrend}\n\n`;
+    
+    csvContent += "Period,Incoming Orders,Deliveries\n";
+    current.chartData.forEach(row => {
+      csvContent += `"${row.period}",${row["Incoming Orders"]},${row["Deliveries"]}\n`;
+    });
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `logismorocco_analytics_${timeframe}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="p-8 space-y-8 max-w-7xl mx-auto">
       
@@ -84,13 +182,41 @@ export default function AnalyticsPage() {
         
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
-          <button className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border border-gray-100 shadow-sm text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
-            <Calendar className="w-4 h-4 text-gray-400" />
-            Last 30 Days
-            <svg className="w-4 h-4 text-gray-400 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"></path></svg>
-          </button>
+          <div className="relative">
+            <button 
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+              className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border border-gray-100 shadow-sm text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <Calendar className="w-4 h-4 text-gray-400" />
+              {datasets[timeframe].label}
+              <svg className={`w-4 h-4 text-gray-400 ml-1 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            
+            {dropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)}></div>
+                <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-100 rounded-xl shadow-lg py-1 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  {(Object.keys(datasets) as Array<keyof typeof datasets>).map((key) => (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        setTimeframe(key);
+                        setDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-4 py-2 text-sm font-semibold transition-colors hover:bg-gray-50 ${timeframe === key ? 'text-brand-500 bg-pink-50/30' : 'text-gray-700'}`}
+                    >
+                      {datasets[key].label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
 
-          <button className="flex items-center gap-2 bg-[#1A1D20] hover:bg-zinc-800 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-colors cursor-pointer">
+          <button 
+            onClick={exportData}
+            className="flex items-center gap-2 bg-[#1A1D20] hover:bg-zinc-800 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-[0.98] cursor-pointer"
+          >
             <Download className="w-4 h-4" />
             Export Data
           </button>
@@ -106,14 +232,15 @@ export default function AnalyticsPage() {
             <div className="w-10 h-10 bg-pink-50 rounded-xl flex items-center justify-center text-brand-500 border border-pink-100">
               <CheckCircle2 className="w-5 h-5" />
             </div>
-            <div className="flex items-center gap-1 text-[11px] font-extrabold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-              <TrendingUp className="w-3 h-3" />
-              +1.5%
-            </div>
+            {getTrendNode(
+              datasets[timeframe].successRateTrend,
+              true,
+              datasets[timeframe].successRateTrendUp
+            )}
           </div>
           <div className="mt-4">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Delivery Success Rate</p>
-            <p className="text-3xl font-black text-gray-900 mt-1.5">94.2%</p>
+            <p className="text-3xl font-black text-gray-900 mt-1.5">{datasets[timeframe].deliverySuccessRate}</p>
           </div>
         </div>
 
@@ -123,14 +250,15 @@ export default function AnalyticsPage() {
             <div className="w-10 h-10 bg-pink-50 rounded-xl flex items-center justify-center text-brand-500 border border-pink-100">
               <Clock className="w-5 h-5" />
             </div>
-            <div className="flex items-center gap-1 text-[11px] font-extrabold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-              <TrendingDown className="w-3 h-3" />
-              -5%
-            </div>
+            {getTrendNode(
+              datasets[timeframe].deliveryTimeTrend,
+              false,
+              datasets[timeframe].deliveryTimeTrendUp
+            )}
           </div>
           <div className="mt-4">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Avg. Delivery Time</p>
-            <p className="text-3xl font-black text-gray-900 mt-1.5">24 hours</p>
+            <p className="text-3xl font-black text-gray-900 mt-1.5">{datasets[timeframe].avgDeliveryTime}</p>
           </div>
         </div>
 
@@ -140,14 +268,15 @@ export default function AnalyticsPage() {
             <div className="w-10 h-10 bg-pink-50 rounded-xl flex items-center justify-center text-brand-500 border border-pink-100">
               <XCircle className="w-5 h-5" />
             </div>
-            <div className="flex items-center gap-1 text-[11px] font-extrabold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-              <TrendingDown className="w-3 h-3" />
-              -0.2%
-            </div>
+            {getTrendNode(
+              datasets[timeframe].cancellationTrend,
+              false,
+              datasets[timeframe].cancellationTrendUp
+            )}
           </div>
           <div className="mt-4">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Return/Refusal Rate</p>
-            <p className="text-3xl font-black text-gray-900 mt-1.5">3.8%</p>
+            <p className="text-3xl font-black text-gray-900 mt-1.5">{datasets[timeframe].cancellationRate}</p>
           </div>
         </div>
 
@@ -157,17 +286,18 @@ export default function AnalyticsPage() {
             <div className="w-10 h-10 bg-pink-50 rounded-xl flex items-center justify-center text-brand-500 border border-pink-100">
               <Coins className="w-5 h-5" />
             </div>
-            <div className="flex items-center gap-1 text-[11px] font-extrabold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-              <TrendingUp className="w-3 h-3" />
-              +12%
-            </div>
+            {getTrendNode(
+              datasets[timeframe].codTrend,
+              true,
+              datasets[timeframe].codTrendUp
+            )}
           </div>
           <div className="mt-4">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
               {userRole === "merchant" ? "Delivered COD Value" : "Total COD Reconciled"}
             </p>
             <p className="text-3xl font-black text-gray-900 mt-1.5">
-              {userRole === "merchant" ? "45,200 MAD" : "1.2M MAD"}
+              {userRole === "merchant" ? datasets[timeframe].merchantCod : datasets[timeframe].adminCod}
             </p>
           </div>
         </div>
@@ -179,7 +309,7 @@ export default function AnalyticsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
             <h3 className="text-xl font-bold text-gray-900">Shipments & Deliveries volume</h3>
-            <p className="text-gray-500 text-xs font-semibold mt-1">Daily breakdown of total incoming orders vs. successful deliveries.</p>
+            <p className="text-gray-500 text-xs font-semibold mt-1">Breakdown of total incoming orders vs. successful deliveries.</p>
           </div>
           
           {/* Legend */}
@@ -199,9 +329,9 @@ export default function AnalyticsPage() {
         <div className="h-80 w-full">
           {mounted ? (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <BarChart data={datasets[timeframe].chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
-                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 12, fontWeight: 600 }} />
+                <XAxis dataKey="period" axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 12, fontWeight: 600 }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 12, fontWeight: 600 }} />
                 <Tooltip 
                   cursor={{ fill: '#F9FAFB' }}

@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\DriverController;
+use App\Http\Controllers\Api\AdminController;
 
 // Public Auth routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -30,6 +31,38 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/admin/users/{id}', [UserController::class, 'update']);
     Route::delete('/admin/users/{id}', [UserController::class, 'destroy']);
     Route::post('/admin/users/{id}/approve', [UserController::class, 'approve']);
+    Route::post('/admin/users/{id}/suspend', [AdminController::class, 'suspendUser']);
+    Route::post('/admin/users/{id}/activate', [AdminController::class, 'activateUser']);
+    Route::get('/admin/users/{id}/stats', [UserController::class, 'getStats']);
+
+    // Admin Orders Management overrides
+    Route::post('/admin/orders/{id}/reassign', [AdminController::class, 'reassignOrder']);
+    Route::post('/admin/orders/{id}/cancel', [AdminController::class, 'cancelOrder']);
+    Route::post('/admin/orders/{id}/notes', [AdminController::class, 'updateOrderNotes']);
+
+    // Admin Finance / Withdrawals Management
+    Route::get('/admin/withdrawals', [AdminController::class, 'getWithdrawals']);
+    Route::post('/admin/withdrawals/{id}/approve', [AdminController::class, 'approveWithdrawal']);
+    Route::post('/admin/withdrawals/{id}/reject', [AdminController::class, 'rejectWithdrawal']);
+
+    // Admin Complaints & Support Tickets
+    Route::get('/admin/complaints', [AdminController::class, 'getComplaints']);
+    Route::post('/admin/complaints/{id}/assign', [AdminController::class, 'assignComplaint']);
+    Route::post('/admin/complaints/{id}/resolve', [AdminController::class, 'resolveComplaint']);
+    Route::post('/admin/complaints/{id}/close', [AdminController::class, 'closeComplaint']);
+
+    // Admin Custom Announcements
+    Route::post('/admin/announcements', [AdminController::class, 'sendAnnouncement']);
+
+    // Admin Audit Logs
+    Route::get('/admin/audit-logs', [AdminController::class, 'getAuditLogs']);
+
+    // Admin Integrations List
+    Route::get('/admin/integrations', [AdminController::class, 'getIntegrations']);
+
+    // Admin System-wide Settings
+    Route::get('/admin/settings', [AdminController::class, 'getSettings']);
+    Route::post('/admin/settings', [AdminController::class, 'updateSettings']);
 
     // Finances Management
     Route::get('/finance', [FinanceController::class, 'index']);

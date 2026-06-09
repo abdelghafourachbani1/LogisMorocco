@@ -48,6 +48,21 @@ class OrderController extends Controller
             $query->where('status', $request->input('status'));
         }
 
+        // 4. Merchant Filter
+        if ($request->filled('merchant_id') && $request->input('merchant_id') !== 'All') {
+            $query->where('merchant_id', $request->input('merchant_id'));
+        }
+
+        // 5. Driver Filter
+        if ($request->filled('livreur_id') && $request->input('livreur_id') !== 'All') {
+            $query->where('livreur_id', $request->input('livreur_id'));
+        }
+
+        // 6. City Filter
+        if ($request->filled('city') && $request->input('city') !== 'All') {
+            $query->where('customer_address', 'like', '%' . $request->input('city') . '%');
+        }
+
         $orders = $query->latest()->paginate(10);
 
         return response()->json([

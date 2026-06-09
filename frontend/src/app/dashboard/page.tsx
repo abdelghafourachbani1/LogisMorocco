@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { BarChart, Bar, Cell, XAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, LineChart, Line } from "recharts";
 import { 
   Users, 
   CheckCircle2, 
@@ -25,7 +25,13 @@ import {
   PenTool,
   ShieldCheck,
   X,
-  FileText
+  FileText,
+  Star,
+  Building,
+  MessageSquare,
+  XCircle,
+  UserPlus,
+  Award
 } from "lucide-react";
 
 // Mock revenue data for charts
@@ -55,6 +61,8 @@ export default function Dashboard() {
   const [mounted, setMounted] = useState(false);
   const [role, setRole] = useState<string>("admin");
   const [stats, setStats] = useState<any>({});
+  const [recentActivity, setRecentActivity] = useState<any>({});
+  const [analytics, setAnalytics] = useState<any>({});
   const [recentItems, setRecentItems] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -69,6 +77,8 @@ export default function Dashboard() {
         const data = await res.json();
         setRole(data.role || "admin");
         setStats(data.stats || {});
+        setRecentActivity(data.recent_activity || {});
+        setAnalytics(data.analytics || {});
         setRecentItems(data.recent_orders || data.recent_deliveries || []);
       }
     } catch (err) {
@@ -93,171 +103,402 @@ export default function Dashboard() {
 
   // --- 1. ADMIN DASHBOARD VIEW ---
   if (role === "admin") {
+    // Combine analytics arrays into a single dataset for Recharts
+    const chartData = analytics.months?.map((month: string, idx: number) => ({
+      name: month,
+      orders: analytics.orders?.[idx] || 0,
+      revenue: analytics.revenue?.[idx] || 0
+    })) || [];
+
     return (
       <div className="p-8 space-y-8 max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Administrative Console</h2>
+            <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">Administrative Console</h2>
             <p className="text-gray-500 text-sm font-medium mt-1">
-              Real-time monitoring across Morocco.
+              Real-time platform performance monitoring across Morocco.
             </p>
           </div>
           <div className="flex items-center gap-3">
             <button className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border border-gray-100 shadow-sm text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
               <Calendar className="w-4 h-4 text-gray-400" />
-              Last 24 Hours
+              Live Supervision
             </button>
           </div>
         </div>
 
-        {/* Admin KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm relative overflow-hidden">
-            <div className="flex justify-between items-start mb-4">
-              <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center text-brand-500">
-                <Users className="w-5 h-5" />
+        {/* 10 KPI Cards Section */}
+        <div className="space-y-6">
+          {/* Row 1: Core Financials & Volume */}
+          <div>
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Core & Financial Metrics</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Total Platform Revenue */}
+              <div className="bg-[#0A0D10] text-white rounded-3xl p-6 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[120px]">
+                <div>
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Total Platform Revenue</span>
+                  <h3 className="text-2xl font-black text-white mt-1">{(stats.total_revenue ?? 0).toLocaleString()} MAD</h3>
+                </div>
+                <div className="absolute right-4 bottom-4 w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-white">
+                  <DollarSign className="w-5 h-5 text-brand-400" />
+                </div>
+              </div>
+
+              {/* Total COD Collected */}
+              <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[120px]">
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total COD Collected</span>
+                  <h3 className="text-2xl font-black text-gray-900 mt-1">{(stats.total_cod_collected ?? 0).toLocaleString()} MAD</h3>
+                </div>
+                <div className="absolute right-4 bottom-4 w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center text-brand-500 border border-pink-100/50">
+                  <Wallet className="w-5 h-5" />
+                </div>
+              </div>
+
+              {/* Total Withdrawals */}
+              <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[120px]">
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Withdrawals</span>
+                  <h3 className="text-2xl font-black text-gray-900 mt-1">{(stats.total_withdrawals ?? 0).toLocaleString()} MAD</h3>
+                </div>
+                <div className="absolute right-4 bottom-4 w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 border border-amber-100/50">
+                  <TrendingDown className="w-5 h-5" />
+                </div>
+              </div>
+
+              {/* Total Orders */}
+              <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[120px]">
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Orders</span>
+                  <h3 className="text-2xl font-black text-gray-900 mt-1">{(stats.total_orders ?? 0).toLocaleString()}</h3>
+                </div>
+                <div className="absolute right-4 bottom-4 w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-500 border border-gray-200/50">
+                  <Package className="w-5 h-5" />
+                </div>
               </div>
             </div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Total Partners</p>
-            <h3 className="text-2xl font-black text-gray-900 tracking-tight">{stats.total_partners}</h3>
           </div>
 
-          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm relative overflow-hidden">
-            <div className="flex justify-between items-start mb-4">
-              <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-green-500">
-                <UserCheck className="w-5 h-5" />
-              </div>
-            </div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Active Partners</p>
-            <h3 className="text-2xl font-black text-gray-900 tracking-tight">{stats.active_partners}</h3>
-          </div>
+          {/* Row 2: User Base & Logistics Statuses */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-1">
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">User Management</h3>
+              <div className="grid grid-cols-2 gap-4">
+                {/* Total Merchants */}
+                <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[110px]">
+                  <div>
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Total Merchants</span>
+                    <span className="text-2xl font-black text-gray-900 mt-1 block">{(stats.total_merchants ?? 0).toLocaleString()}</span>
+                  </div>
+                  <div className="absolute right-3 bottom-3 w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600 border border-purple-100/50">
+                    <Building className="w-4 h-4" />
+                  </div>
+                </div>
 
-          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm relative overflow-hidden">
-            <div className="flex justify-between items-start mb-4">
-              <div className="w-10 h-10 rounded-xl bg-yellow-50 flex items-center justify-center text-yellow-600">
-                <Clock className="w-5 h-5" />
+                {/* Total Drivers */}
+                <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[110px]">
+                  <div>
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Total Drivers</span>
+                    <span className="text-2xl font-black text-gray-900 mt-1 block">{(stats.total_drivers ?? 0).toLocaleString()}</span>
+                  </div>
+                  <div className="absolute right-3 bottom-3 w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-500 border border-blue-100/50">
+                    <Truck className="w-4 h-4" />
+                  </div>
+                </div>
               </div>
             </div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Verification Queue</p>
-            <h3 className="text-2xl font-black text-gray-900 tracking-tight">{stats.pending_partners}</h3>
-          </div>
 
-          <div className="bg-[#0A0D10] text-white rounded-3xl p-6 shadow-sm relative overflow-hidden">
-            <div className="flex justify-between items-start mb-4">
-              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
-                <RotateCw className="w-5 h-5 text-zinc-300" />
+            <div className="lg:col-span-2">
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Logistics Statuses</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {/* Pending Orders */}
+                <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[110px]">
+                  <div>
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Pending Orders</span>
+                    <span className="text-2xl font-black text-amber-500 mt-1 block">{(stats.pending_orders ?? 0).toLocaleString()}</span>
+                  </div>
+                  <div className="absolute right-3 bottom-3 w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center text-amber-500 border border-amber-100/50">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                </div>
+
+                {/* Orders in Delivery */}
+                <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[110px]">
+                  <div>
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">In Delivery</span>
+                    <span className="text-2xl font-black text-blue-600 mt-1 block">{(stats.in_transit_orders ?? 0).toLocaleString()}</span>
+                  </div>
+                  <div className="absolute right-3 bottom-3 w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 border border-blue-100/50">
+                    <Truck className="w-4 h-4" />
+                  </div>
+                </div>
+
+                {/* Delivered Orders */}
+                <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[110px]">
+                  <div>
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Delivered Orders</span>
+                    <span className="text-2xl font-black text-emerald-600 mt-1 block">{(stats.delivered_orders ?? 0).toLocaleString()}</span>
+                  </div>
+                  <div className="absolute right-3 bottom-3 w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 border border-emerald-100/50">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                </div>
+
+                {/* Cancelled Orders */}
+                <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[110px]">
+                  <div>
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Cancelled Orders</span>
+                    <span className="text-2xl font-black text-red-500 mt-1 block">{(stats.cancelled_orders ?? 0).toLocaleString()}</span>
+                  </div>
+                  <div className="absolute right-3 bottom-3 w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-red-500 border border-red-100/50">
+                    <XCircle className="w-4 h-4" />
+                  </div>
+                </div>
               </div>
             </div>
-            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">COD to Collect</p>
-            <h3 className="text-2xl font-black text-white tracking-tight">{stats.cod_to_collect?.toLocaleString()} MAD</h3>
           </div>
         </div>
 
-        {/* Middle Grid (Revenue Chart + User Distribution) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
+        {/* Analytics Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Revenue and Orders Chart */}
+          <div className="lg:col-span-2 bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between">
             <div className="flex items-center justify-between mb-8">
-              <h3 className="text-base font-bold text-gray-900">Revenue Performance</h3>
-              <div className="flex items-center gap-2 text-xs font-bold text-gray-500 bg-gray-50 px-3 py-1.5 rounded-full">
-                <span className="w-2 h-2 rounded-full bg-brand-500"></span>
-                COD Flow
+              <div>
+                <h3 className="text-base font-extrabold text-gray-900">Monthly Orders & Revenue</h3>
+                <p className="text-xs text-gray-400 font-semibold mt-0.5">Performance analytics for the last 6 months</p>
+              </div>
+              <div className="flex items-center gap-4 text-xs font-bold">
+                <div className="flex items-center gap-1.5 text-gray-500">
+                  <span className="w-2.5 h-2.5 rounded-full bg-brand-500"></span>
+                  Revenue (MAD)
+                </div>
+                <div className="flex items-center gap-1.5 text-gray-400">
+                  <span className="w-2.5 h-2.5 rounded-full bg-zinc-300"></span>
+                  Orders
+                </div>
               </div>
             </div>
             
-            <div className="h-64">
-              {mounted && (
+            <div className="h-72">
+              {mounted && chartData.length > 0 && (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} barSize={32}>
+                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#DB0087" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#DB0087" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
                     <XAxis 
                       dataKey="name" 
                       axisLine={false}
                       tickLine={false}
                       tick={{ fill: '#9CA3AF', fontSize: 11, fontWeight: 700 }}
                     />
+                    <YAxis 
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: '#9CA3AF', fontSize: 11, fontWeight: 700 }}
+                    />
                     <Tooltip 
-                      cursor={{fill: '#f9fafb'}}
                       contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                     />
-                    <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#F3F4F6">
-                      {chartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={(entry.name === 'MAR' || entry.name === 'SEP') ? '#DB0087' : '#F3F4F6'} />
-                      ))}
-                    </Bar>
-                  </BarChart>
+                    <Area type="monotone" dataKey="revenue" stroke="#DB0087" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" name="Revenue (MAD)" />
+                    <Bar dataKey="orders" fill="#E5E7EB" radius={[4, 4, 0, 0]} maxBarSize={16} name="Orders" />
+                  </AreaChart>
                 </ResponsiveContainer>
               )}
             </div>
           </div>
 
+          {/* Performance Highlights (Success Rate & Leaderboard) */}
           <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between">
-            <h3 className="text-base font-bold text-gray-900 mb-6">Delivery Supervision</h3>
-            <div className="space-y-4 flex-1">
-              <div>
-                <div className="flex justify-between items-center mb-1 text-xs">
-                  <span className="font-bold text-gray-500">Total Shipments</span>
-                  <span className="font-black text-gray-950">{stats.total_orders}</span>
-                </div>
+            <div>
+              <h3 className="text-base font-extrabold text-gray-900 mb-4">Platform Performance</h3>
+              
+              {/* Delivery Success Rate Gauge */}
+              <div className="text-center py-4 border-b border-gray-50 mb-4">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Delivery Success Rate</p>
+                <p className="text-3xl font-black text-emerald-600">{analytics.success_rate ?? 100.0}%</p>
+                <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Average successful deliveries across fleet</p>
               </div>
-              <div>
-                <div className="flex justify-between items-center mb-1 text-xs">
-                  <span className="font-bold text-gray-500">In Transit</span>
-                  <span className="font-black text-brand-500">{stats.in_transit_orders}</span>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between items-center mb-1 text-xs">
-                  <span className="font-bold text-gray-500">Delivered Successfully</span>
-                  <span className="font-black text-emerald-600">{stats.delivered_orders}</span>
-                </div>
-              </div>
-            </div>
 
-            <div className="mt-6 pt-6 border-t border-gray-50 text-center">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Fleet Efficiency</p>
-              <p className="text-2xl font-black text-brand-500">98.4%</p>
+              {/* Top Merchants List */}
+              <div className="mb-4">
+                <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <Award className="w-3.5 h-3.5 text-purple-500" />
+                  Top Merchants
+                </h4>
+                <div className="space-y-2">
+                  {analytics.top_merchants?.length > 0 ? (
+                    analytics.top_merchants.map((m: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center text-xs py-1 border-b border-gray-50/50 last:border-none">
+                        <span className="font-bold text-gray-800">{m.name}</span>
+                        <div className="text-right">
+                          <span className="font-extrabold text-gray-900">{m.orders_count} orders</span>
+                          <span className="text-gray-400 ml-1.5 text-[10px]">({m.success_rate}%)</span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-gray-400 font-semibold py-2">No top merchants recorded yet.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Top Drivers List */}
+              <div>
+                <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <Award className="w-3.5 h-3.5 text-blue-500" />
+                  Top Drivers
+                </h4>
+                <div className="space-y-2">
+                  {analytics.top_drivers?.length > 0 ? (
+                    analytics.top_drivers.map((d: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center text-xs py-1 border-b border-gray-50/50 last:border-none">
+                        <span className="font-bold text-gray-800">{d.name}</span>
+                        <div className="text-right flex items-center gap-1.5 justify-end">
+                          <span className="font-extrabold text-gray-900">{d.orders_count} deliv.</span>
+                          <span className="text-amber-500 font-bold flex items-center gap-0.5 text-[10px]">
+                            <Star className="w-2.5 h-2.5 fill-amber-500 stroke-amber-500" />
+                            {d.rating}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-gray-400 font-semibold py-2">No top drivers recorded yet.</p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Recent Dispatch Feed */}
-        <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-base font-bold text-gray-900">Recent Dispatch Supervision</h3>
-            <span className="text-xs font-bold text-gray-400">Live Updates</span>
-          </div>
+        {/* Recent Activity Grid */}
+        <div>
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Recent Platform Activity</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            
+            {/* Column 1: New Merchants */}
+            <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600">
+                    <UserPlus className="w-4 h-4" />
+                  </div>
+                  <h4 className="text-xs font-extrabold text-gray-900">New Merchants</h4>
+                </div>
+                <div className="space-y-3">
+                  {recentActivity.new_merchants?.length > 0 ? (
+                    recentActivity.new_merchants.map((m: any) => (
+                      <div key={m.id} className="text-xs space-y-0.5">
+                        <div className="flex justify-between items-center">
+                          <p className="font-bold text-gray-800 truncate pr-2">{m.name}</p>
+                          <span className="text-[9px] text-gray-400 font-semibold flex-shrink-0">{m.time}</span>
+                        </div>
+                        <p className="text-[10px] text-gray-400 truncate">{m.email}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-gray-400 font-semibold py-2">No new merchants registered.</p>
+                  )}
+                </div>
+              </div>
+            </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                  <th className="pb-3">Tracking ID</th>
-                  <th className="pb-3">Merchant</th>
-                  <th className="pb-3">Courier</th>
-                  <th className="pb-3">Status</th>
-                  <th className="pb-3 text-right">Value</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50 text-xs font-semibold text-gray-800">
-                {recentItems.map((o) => (
-                  <tr key={o.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="py-4 font-bold text-brand-500">{o.tracking_number}</td>
-                    <td className="py-4 text-gray-900">{o.merchant_name}</td>
-                    <td className="py-4 text-gray-500">{o.driver_name}</td>
-                    <td className="py-4">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider ${
-                        o.status === "delivered" ? "bg-green-50 text-green-700" :
-                        o.status === "in_transit" ? "bg-pink-50 text-brand-500" : "bg-blue-50 text-blue-700"
-                      }`}>
-                        {o.status}
-                      </span>
-                    </td>
-                    <td className="py-4 font-bold text-gray-900 text-right">{o.amount_cod} MAD</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {/* Column 2: New Drivers */}
+            <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
+                    <UserPlus className="w-4 h-4" />
+                  </div>
+                  <h4 className="text-xs font-extrabold text-gray-900">New Drivers</h4>
+                </div>
+                <div className="space-y-3">
+                  {recentActivity.new_drivers?.length > 0 ? (
+                    recentActivity.new_drivers.map((d: any) => (
+                      <div key={d.id} className="text-xs space-y-0.5">
+                        <div className="flex justify-between items-center">
+                          <p className="font-bold text-gray-800 truncate pr-2">{d.name}</p>
+                          <span className="text-[9px] text-gray-400 font-semibold flex-shrink-0">{d.time}</span>
+                        </div>
+                        <p className="text-[10px] text-gray-400 uppercase font-black tracking-wider">{d.vehicle}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-gray-400 font-semibold py-2">No new drivers registered.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Column 3: Recent Deliveries */}
+            <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <h4 className="text-xs font-extrabold text-gray-900">Recent Deliveries</h4>
+                </div>
+                <div className="space-y-3">
+                  {recentActivity.recent_deliveries?.length > 0 ? (
+                    recentActivity.recent_deliveries.map((o: any) => (
+                      <div key={o.id} className="text-xs space-y-0.5">
+                        <div className="flex justify-between items-center">
+                          <p className="font-bold text-brand-500 truncate pr-2">{o.tracking}</p>
+                          <span className="text-[9px] text-gray-400 font-semibold flex-shrink-0">{o.time}</span>
+                        </div>
+                        <p className="text-[10px] font-extrabold text-gray-900">{o.amount?.toLocaleString()} MAD</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-gray-400 font-semibold py-2">No recent deliveries recorded.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Column 4: Recent Complaints */}
+            <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-red-500">
+                    <MessageSquare className="w-4 h-4" />
+                  </div>
+                  <h4 className="text-xs font-extrabold text-gray-900">Recent Complaints</h4>
+                </div>
+                <div className="space-y-3">
+                  {recentActivity.recent_complaints?.length > 0 ? (
+                    recentActivity.recent_complaints.map((c: any) => (
+                      <div key={c.id} className="text-xs space-y-0.5">
+                        <div className="flex justify-between items-center">
+                          <p className="font-bold text-gray-800 truncate pr-2">{c.title}</p>
+                          <span className="text-[9px] text-gray-400 font-semibold flex-shrink-0">{c.time}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px]">
+                          <span className="text-gray-400 truncate pr-1">By {c.user_name}</span>
+                          <span className={`inline-block px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${
+                            c.status === "resolved" ? "bg-green-50 text-green-700" : "bg-yellow-50 text-yellow-700"
+                          }`}>
+                            {c.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-gray-400 font-semibold py-2">No recent complaints filed.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
+
       </div>
     );
   }

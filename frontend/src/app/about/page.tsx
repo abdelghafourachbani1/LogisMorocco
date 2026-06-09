@@ -30,19 +30,29 @@ export default function AboutPage() {
               </p>
             </div>
             
-            {/* Stats Column */}
-            <div className="lg:col-span-5 bg-gray-50 rounded-3xl p-8 border border-gray-100 grid grid-cols-2 gap-8 shadow-sm">
-              <div>
-                <h3 className="text-4xl font-black text-gray-900 mb-1">30+</h3>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Cities Covered</p>
-              </div>
-              <div>
-                <h3 className="text-4xl font-black text-gray-900 mb-1">99.8%</h3>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">On-Time Rate</p>
-              </div>
-              <div className="col-span-2 border-t border-gray-200/60 pt-6">
-                <h3 className="text-4xl font-black text-gray-900 mb-1">1.2M+</h3>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Packages Delivered</p>
+            {/* Stats Column with Background Image */}
+            <div className="lg:col-span-5 relative min-h-[450px] w-full rounded-3xl overflow-hidden shadow-lg border border-gray-100 self-stretch">
+              <img
+                src="/about_logistics.png"
+                alt="LogiMorocco Logistics Team"
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-gray-950/80 via-gray-950/20 to-transparent"></div>
+              
+              {/* Overlay Stats Card */}
+              <div className="absolute bottom-6 left-6 right-6 bg-white/95 backdrop-blur-md p-6 rounded-2xl border border-white/20 grid grid-cols-2 gap-4 shadow-xl">
+                <div>
+                  <h3 className="text-2xl font-black text-gray-900 mb-0.5">30+</h3>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Cities Covered</p>
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black text-gray-900 mb-0.5">99.8%</h3>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">On-Time Rate</p>
+                </div>
+                <div className="col-span-2 border-t border-gray-200/60 pt-3">
+                  <h3 className="text-2xl font-black text-gray-900 mb-0.5">1.2M+</h3>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Packages Delivered</p>
+                </div>
               </div>
             </div>
           </div>

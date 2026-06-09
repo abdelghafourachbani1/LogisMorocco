@@ -26,46 +26,124 @@ class DashboardController extends Controller
 
     private function adminDashboard(Request $request)
     {
-        $totalPartners = User::whereIn('role', ['merchant', 'livreur'])->count();
-        $activePartners = User::whereIn('role', ['merchant', 'livreur'])->whereNotNull('email_verified_at')->count();
-        $pendingPartners = User::whereIn('role', ['merchant', 'livreur'])->whereNull('email_verified_at')->count();
-        $suspendedPartners = 0; // Mock
-
+        $totalMerchants = User::where('role', 'merchant')->count();
+        $totalDrivers = User::where('role', 'livreur')->count();
         $totalOrders = Order::count();
+        
+        $pendingOrders = Order::where('status', 'pending')->count();
         $inTransitOrders = Order::where('status', 'in_transit')->count();
         $deliveredOrders = Order::where('status', 'delivered')->count();
-        $codToCollect = User::where('role', 'livreur')->sum('balance');
+        $cancelledOrders = Order::whereIn('status', ['canceled', 'cancelled', 'refused'])->count();
 
-        $recentOrders = Order::with(['merchant', 'livreur'])
-            ->latest()
-            ->take(5)
+        // Commission settings lookup
+        $commissionSetting = \DB::table('platform_settings')->where('key', 'commission_rate')->first();
+        $commissionRate = $commissionSetting ? floatval($commissionSetting->value) : 10.0;
+        
+        $totalDeliveredCod = Order::where('status', 'delivered')->sum('amount_cod');
+        $totalRevenue = ($totalDeliveredCod * $commissionRate) / 100.0;
+
+        $totalCodCollected = $totalDeliveredCod;
+        $totalWithdrawals = abs(\App\Models\Transaction::where('type', 'payout')->where('status', 'completed')->sum('amount'));
+
+        // Recent Activities
+        $newMerchants = User::where('role', 'merchant')->latest()->take(3)->get()->map(function($m) {
+            return [
+                'id' => $m->id,
+                'name' => $m->name,
+                'email' => $m->email,
+                'time' => $m->created_at->diffForHumans()
+            ];
+        });
+
+        $newDrivers = User::where('role', 'livreur')->latest()->take(3)->get()->map(function($d) {
+            return [
+                'id' => $d->id,
+                'name' => $d->name,
+                'vehicle' => $d->vehicle_type ?? 'N/A',
+                'time' => $d->created_at->diffForHumans()
+            ];
+        });
+
+        $recentDeliveries = Order::where('status', 'delivered')->latest()->take(3)->get()->map(function($o) {
+            return [
+                'id' => $o->id,
+                'tracking' => $o->tracking_number,
+                'amount' => floatval($o->amount_cod),
+                'time' => $o->updated_at->diffForHumans()
+            ];
+        });
+
+        $recentComplaints = \DB::table('complaints')
+            ->join('users', 'complaints.user_id', '=', 'users.id')
+            ->select('complaints.*', 'users.name as user_name')
+            ->latest('complaints.created_at')
+            ->take(3)
             ->get()
-            ->map(function($o) {
+            ->map(function($c) {
                 return [
-                    'id' => $o->id,
-                    'tracking_number' => $o->tracking_number,
-                    'customer_name' => $o->customer_name,
-                    'amount_cod' => floatval($o->amount_cod),
-                    'status' => $o->status,
-                    'merchant_name' => $o->merchant->name ?? 'N/A',
-                    'driver_name' => $o->livreur->name ?? 'Unassigned',
-                    'date' => $o->created_at->format('M d, Y')
+                    'id' => $c->id,
+                    'title' => $c->title,
+                    'user_name' => $c->user_name,
+                    'status' => $c->status,
+                    'time' => \Carbon\Carbon::parse($c->created_at)->diffForHumans()
                 ];
             });
+
+        // MoM analytics charts (simulate last 6 months)
+        $months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+        $ordersPerMonth = [120, 150, 180, 220, 270, $totalOrders];
+        $revenuePerMonth = [3500, 4200, 5100, 6300, 7800, $totalRevenue];
+
+        // Top merchants (mock stats)
+        $topMerchants = User::where('role', 'merchant')->take(3)->get()->map(function($m) {
+            $orderCount = Order::where('merchant_id', $m->id)->count();
+            return [
+                'name' => $m->name,
+                'orders_count' => $orderCount,
+                'success_rate' => $orderCount > 0 ? 92.4 : 100.0
+            ];
+        });
+
+        // Top drivers
+        $topDrivers = User::where('role', 'livreur')->take(3)->get()->map(function($d) {
+            $orderCount = Order::where('livreur_id', $d->id)->count();
+            return [
+                'name' => $d->name,
+                'orders_count' => $orderCount,
+                'rating' => floatval($d->rating)
+            ];
+        });
+
+        $successRate = $totalOrders > 0 ? round(($deliveredOrders / $totalOrders) * 100, 1) : 100.0;
 
         return response()->json([
             'role' => 'admin',
             'stats' => [
-                'total_partners' => $totalPartners,
-                'active_partners' => $activePartners,
-                'pending_partners' => $pendingPartners,
-                'suspended_partners' => $suspendedPartners,
+                'total_merchants' => $totalMerchants,
+                'total_drivers' => $totalDrivers,
                 'total_orders' => $totalOrders,
+                'pending_orders' => $pendingOrders,
                 'in_transit_orders' => $inTransitOrders,
                 'delivered_orders' => $deliveredOrders,
-                'cod_to_collect' => floatval($codToCollect),
+                'cancelled_orders' => $cancelledOrders,
+                'total_revenue' => floatval($totalRevenue),
+                'total_cod_collected' => floatval($totalCodCollected),
+                'total_withdrawals' => floatval($totalWithdrawals),
             ],
-            'recent_orders' => $recentOrders
+            'recent_activity' => [
+                'new_merchants' => $newMerchants,
+                'new_drivers' => $newDrivers,
+                'recent_deliveries' => $recentDeliveries,
+                'recent_complaints' => $recentComplaints,
+            ],
+            'analytics' => [
+                'months' => $months,
+                'orders' => $ordersPerMonth,
+                'revenue' => $revenuePerMonth,
+                'success_rate' => $successRate,
+                'top_merchants' => $topMerchants,
+                'top_drivers' => $topDrivers,
+            ]
         ]);
     }
 
