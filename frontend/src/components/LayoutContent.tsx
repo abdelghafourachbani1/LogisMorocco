@@ -291,7 +291,7 @@ export default function LayoutContent({ children }: { children: React.ReactNode 
             </div>
             <input
               type="text"
-              placeholder="Search reports, drivers, or orders..."
+              placeholder="Search orders, tracking IDs..."
               className="w-full bg-[#F3F4F6]/50 pl-11 pr-4 py-2.5 rounded-xl text-sm border-none focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-800 placeholder-gray-400 font-medium"
             />
           </div>

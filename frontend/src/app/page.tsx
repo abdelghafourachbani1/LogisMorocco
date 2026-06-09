@@ -68,7 +68,7 @@ export default function LandingPage() {
             {/* Right Visual: Truck Image */}
             <div className="relative w-full h-[600px] lg:h-[700px] rounded-3xl overflow-hidden shadow-2xl">
               <img
-                src="https://images.unsplash.com/photo-1586528116311-ad8ed7c83a00?q=80&w=2070&auto=format&fit=crop"
+                src="/logistics_truck.png"
                 alt="Logistics Truck in Warehouse"
                 className="absolute inset-0 w-full h-full object-cover"
               />

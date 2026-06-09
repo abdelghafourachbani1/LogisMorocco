@@ -29,6 +29,10 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
+            'role' => 'merchant',
+            'status' => 'active',
+            'phone' => '06' . fake()->numerify('########'),
+            'balance' => fake()->randomFloat(2, 1000, 15000),
             'remember_token' => Str::random(10),
         ];
     }
@@ -40,6 +44,40 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
+        ]);
+    }
+
+    /**
+     * Merchant role state.
+     */
+    public function merchant(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'merchant',
+            'store_description' => fake()->sentence(),
+            'store_address' => fake()->address(),
+            'store_website' => 'https://' . fake()->domainName(),
+            'bank_name' => fake()->randomElement(['CIH Bank', 'Attijariwafa Bank', 'BMCE Bank', 'Banque Populaire']),
+            'bank_rib' => fake()->numerify('########################'),
+            'bank_holder_name' => fake()->name(),
+            'webhook_url' => fake()->url(),
+            'webhook_secret' => Str::random(32),
+        ]);
+    }
+
+    /**
+     * Driver/Livreur role state.
+     */
+    public function livreur(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'livreur',
+            'vehicle_type' => fake()->randomElement(['moto', 'car', 'van']),
+            'vehicle_plate' => fake()->bothify('#####-?-##'),
+            'cin' => fake()->bothify('??######'),
+            'rating' => fake()->randomFloat(2, 4.0, 5.0),
+            'available_balance' => fake()->randomFloat(2, 500, 3000),
+            'pending_balance' => fake()->randomFloat(2, 0, 1000),
         ]);
     }
 }

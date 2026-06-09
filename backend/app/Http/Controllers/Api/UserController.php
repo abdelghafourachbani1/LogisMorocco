@@ -39,9 +39,10 @@ class UserController extends Controller
 
         // Status filter
         if ($request->filled('status') && $request->input('status') !== 'All') {
-            if ($request->input('status') === 'Active') {
+            $status = strtolower($request->input('status'));
+            if ($status === 'active' || $status === 'approved') {
                 $query->whereNotNull('email_verified_at');
-            } elseif ($request->input('status') === 'Verification Pending') {
+            } elseif ($status === 'verification pending' || $status === 'pending' || $status === 'verification_pending') {
                 $query->whereNull('email_verified_at');
             }
         }
@@ -52,10 +53,17 @@ class UserController extends Controller
         $users = $query->latest()->paginate(10);
 
         // Calculate KPIs
-        $totalPartners = User::whereIn('role', ['merchant', 'livreur'])->count();
-        $activePartners = User::whereIn('role', ['merchant', 'livreur'])->whereNotNull('email_verified_at')->count();
-        $pendingPartners = User::whereIn('role', ['merchant', 'livreur'])->whereNull('email_verified_at')->count();
-        $suspendedPartners = 0; // Mocked
+        $roleParam = $request->query('role');
+        $kpiQuery = User::query();
+        if ($roleParam) {
+            $kpiQuery->where('role', $roleParam);
+        } else {
+            $kpiQuery->whereIn('role', ['merchant', 'livreur']);
+        }
+        $totalPartners = (clone $kpiQuery)->count();
+        $activePartners = (clone $kpiQuery)->where('status', '!=', 'suspended')->whereNotNull('email_verified_at')->count();
+        $pendingPartners = (clone $kpiQuery)->where('status', '!=', 'suspended')->whereNull('email_verified_at')->count();
+        $suspendedPartners = (clone $kpiQuery)->where('status', 'suspended')->count();
 
         // Map users to UI response format
         $mappedUsers = collect($users->items())->map(function($user) {
@@ -75,11 +83,14 @@ class UserController extends Controller
                 'avatarBg' => 'bg-purple-50',
                 'avatarColor' => 'text-purple-600',
                 'role' => $user->role === 'merchant' ? 'Merchant' : 'Driver',
-                'status' => $user->email_verified_at ? 'Active' : 'Verification Pending',
+                'status' => $user->status === 'suspended' ? 'Suspended' : ($user->email_verified_at ? 'Active' : 'Verification Pending'),
                 'region' => $region,
                 'joinedDate' => $user->created_at->format('M d, Y'),
                 'verified' => !is_null($user->email_verified_at),
                 'balance' => $user->balance,
+                'vehicle_type' => $user->vehicle_type,
+                'vehicle_plate' => $user->vehicle_plate,
+                'cin' => $user->cin,
             ];
         });
 
@@ -173,6 +184,71 @@ class UserController extends Controller
         return response()->json([
             'message' => 'User Approved Successfully.',
             'user' => $user
+        ]);
+    }
+
+    public function getStats($id)
+    {
+        $user = User::findOrFail($id);
+        
+        $totalOrders = \App\Models\Order::where(function($q) use ($user) {
+            if ($user->role === 'merchant') {
+                $q->where('merchant_id', $user->id);
+            } else {
+                $q->where('livreur_id', $user->id);
+            }
+        })->count();
+        
+        $pendingOrders = \App\Models\Order::where(function($q) use ($user) {
+            if ($user->role === 'merchant') {
+                $q->where('merchant_id', $user->id);
+            } else {
+                $q->where('livreur_id', $user->id);
+            }
+        })->whereIn('status', ['pending', 'assigned'])->count();
+
+        $inTransitOrders = \App\Models\Order::where(function($q) use ($user) {
+            if ($user->role === 'merchant') {
+                $q->where('merchant_id', $user->id);
+            } else {
+                $q->where('livreur_id', $user->id);
+            }
+        })->where('status', 'in_transit')->count();
+
+        $deliveredOrders = \App\Models\Order::where(function($q) use ($user) {
+            if ($user->role === 'merchant') {
+                $q->where('merchant_id', $user->id);
+            } else {
+                $q->where('livreur_id', $user->id);
+            }
+        })->where('status', 'delivered')->count();
+
+        $cancelledOrders = \App\Models\Order::where(function($q) use ($user) {
+            if ($user->role === 'merchant') {
+                $q->where('merchant_id', $user->id);
+            } else {
+                $q->where('livreur_id', $user->id);
+            }
+        })->where('status', 'canceled')->count();
+
+        $totalSales = \App\Models\Order::where(function($q) use ($user) {
+            if ($user->role === 'merchant') {
+                $q->where('merchant_id', $user->id);
+            } else {
+                $q->where('livreur_id', $user->id);
+            }
+        })->where('status', 'delivered')->sum('amount_cod');
+
+        return response()->json([
+            'stats' => [
+                'total_orders' => $totalOrders,
+                'pending_orders' => $pendingOrders,
+                'in_transit_orders' => $inTransitOrders,
+                'delivered_orders' => $deliveredOrders,
+                'cancelled_orders' => $cancelledOrders,
+                'total_sales' => $totalSales,
+                'wallet_balance' => $user->balance
+            ]
         ]);
     }
 }

@@ -29,8 +29,10 @@ interface OrderRow {
   amount_cod: number;
   status: string;
   created_at: string;
-  merchant?: { name: string } | null;
-  livreur?: { name: string } | null;
+  merchant?: { name: string; email?: string } | null;
+  livreur?: { name: string; phone?: string | null } | null;
+  livreur_id?: number | null;
+  admin_notes?: string | null;
 }
 
 interface DashboardStats {
@@ -62,6 +64,42 @@ function getApiUrl(path: string): string {
   return `${host}${path}`;
 }
 
+function parseCSV(text: string): string[][] {
+  const lines: string[][] = [];
+  let row: string[] = [""];
+  let insideQuote = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+
+    if (char === '"') {
+      if (insideQuote && nextChar === '"') {
+        row[row.length - 1] += '"';
+        i++;
+      } else {
+        insideQuote = !insideQuote;
+      }
+    } else if (char === ',' && !insideQuote) {
+      row.push("");
+    } else if ((char === '\r' || char === '\n') && !insideQuote) {
+      if (char === '\r' && nextChar === '\n') {
+        i++;
+      }
+      lines.push(row);
+      row = [""];
+    } else {
+      row[row.length - 1] += char;
+    }
+  }
+  if (row.length > 1 || row[0] !== "") {
+    lines.push(row);
+  }
+  return lines;
+}
+
+const CITIES = ["Casablanca", "Rabat", "Marrakech", "Agadir", "Tangier", "Fez", "Oujda", "Meknes"];
+
 export default function Orders() {
   const [userRole, setUserRole] = useState<string>("admin");
   const [orders, setOrders] = useState<OrderRow[]>([]);
@@ -71,10 +109,17 @@ export default function Orders() {
   const [activeTab, setActiveTab] = useState<string>("All"); // Livreur: "available", "active"
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [cityFilter, setCityFilter] = useState("All");
+  const [merchantFilter, setMerchantFilter] = useState("All");
+  const [driverFilter, setDriverFilter] = useState("All");
   const [currentPage, setCurrentPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
   const [totalEntries, setTotalEntries] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Lists for Filters
+  const [merchantsList, setMerchantsList] = useState<any[]>([]);
+  const [driversList, setDriversList] = useState<any[]>([]);
 
   // Create Order Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -84,6 +129,103 @@ export default function Orders() {
   const [amountCod, setAmountCod] = useState("");
   const [modalError, setModalError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Bulk Import Modal State
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importStep, setImportStep] = useState(1);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvRows, setCsvRows] = useState<string[][]>([]);
+  const [columnMapping, setColumnMapping] = useState({
+    customer_name: "",
+    customer_phone: "",
+    customer_address: "",
+    amount_cod: ""
+  });
+  const [previewData, setPreviewData] = useState<{
+    valid_count: number;
+    invalid_count: number;
+    valid_rows: any[];
+    invalid_rows: any[];
+  }>({ valid_count: 0, invalid_count: 0, valid_rows: [], invalid_rows: [] });
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState("");
+
+  const [selectedOrder, setSelectedOrder] = useState<OrderRow | null>(null);
+
+  // Internal Notes State
+  const [internalNote, setInternalNote] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+
+  useEffect(() => {
+    if (selectedOrder) {
+      setInternalNote(selectedOrder.admin_notes || "");
+    } else {
+      setInternalNote("");
+    }
+  }, [selectedOrder]);
+
+  const handleSaveInternalNotes = async () => {
+    if (!selectedOrder) return;
+    setSavingNote(true);
+    try {
+      const xsrfToken = getCookie("XSRF-TOKEN");
+      const res = await fetch(getApiUrl(`/api/admin/orders/${selectedOrder.id}/notes`), {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {})
+        },
+        body: JSON.stringify({ notes: internalNote }),
+        credentials: "include"
+      });
+      if (res.ok) {
+        setSelectedOrder(prev => prev ? { ...prev, admin_notes: internalNote } : null);
+        fetchOrders();
+      }
+    } catch (err) {
+      console.error("Failed to update notes:", err);
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const fetchFilterLists = async () => {
+    try {
+      // Drivers
+      const driversRes = await fetch(getApiUrl("/api/admin/users?role=livreur"), {
+        headers: { "Accept": "application/json" },
+        credentials: "include"
+      });
+      if (driversRes.ok) {
+        const dData = await driversRes.json();
+        setDriversList(dData.users || []);
+      }
+
+      // Merchants
+      const merchantsRes = await fetch(getApiUrl("/api/admin/users?role=merchant"), {
+        headers: { "Accept": "application/json" },
+        credentials: "include"
+      });
+      if (merchantsRes.ok) {
+        const mData = await merchantsRes.json();
+        setMerchantsList(mData.users || []);
+      }
+    } catch (err) {
+      console.error("Failed to load filter lists:", err);
+    }
+  };
+
+  const fetchDriversList = async () => {
+    await fetchFilterLists();
+  };
+
+  useEffect(() => {
+    if (selectedOrder && userRole === "admin") {
+      fetchFilterLists();
+    }
+  }, [selectedOrder, userRole]);
+
 
   // Fetch user role
   const fetchUserRole = async () => {
@@ -139,6 +281,17 @@ export default function Orders() {
         if (statusFilter !== "All") {
           queryParams.append("status", statusFilter);
         }
+        if (userRole === "admin") {
+          if (cityFilter && cityFilter !== "All") {
+            queryParams.append("city", cityFilter);
+          }
+          if (merchantFilter && merchantFilter !== "All") {
+            queryParams.append("merchant_id", merchantFilter);
+          }
+          if (driverFilter && driverFilter !== "All") {
+            queryParams.append("livreur_id", driverFilter);
+          }
+        }
       }
 
       const res = await fetch(getApiUrl(`/api/orders?${queryParams.toString()}`), {
@@ -162,6 +315,170 @@ export default function Orders() {
     }
   };
 
+  // Selected Order for Details Drawer
+
+  // Export to CSV Function
+  const handleExportCSV = () => {
+    if (orders.length === 0) return;
+    const headers = ["Tracking ID", "Customer Name", "Customer Phone", "Address", "COD Amount", "Status", "Date"];
+    const rows = orders.map(o => [
+      o.tracking_number,
+      o.customer_name,
+      o.customer_phone,
+      o.customer_address,
+      o.amount_cod,
+      o.status,
+      new Date(o.created_at).toLocaleString()
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(","), ...rows.map(e => e.map(val => `"${val}"`).join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `orders_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // CSV File Upload handler
+  const handleCSVFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const parsed = parseCSV(text);
+      if (parsed.length === 0) {
+        setImportError("The CSV file is empty.");
+        return;
+      }
+
+      const headers = parsed[0].map(h => h.trim());
+      const dataRows = parsed.slice(1).filter(r => r.length > 0 && r.some(cell => cell.trim() !== ""));
+
+      setCsvHeaders(headers);
+      setCsvRows(dataRows);
+      setImportError("");
+
+      // Attempt to auto-map fields by name
+      const mapping = {
+        customer_name: "",
+        customer_phone: "",
+        customer_address: "",
+        amount_cod: ""
+      };
+
+      headers.forEach(header => {
+        const lower = header.toLowerCase();
+        if (lower.includes("name") || lower.includes("nom") || lower.includes("client")) {
+          mapping.customer_name = header;
+        } else if (lower.includes("phone") || lower.includes("tel") || lower.includes("mobile")) {
+          mapping.customer_phone = header;
+        } else if (lower.includes("address") || lower.includes("adresse") || lower.includes("destination") || lower.includes("ville") || lower.includes("city")) {
+          mapping.customer_address = header;
+        } else if (lower.includes("cod") || lower.includes("amount") || lower.includes("prix") || lower.includes("total")) {
+          mapping.amount_cod = header;
+        }
+      });
+
+      setColumnMapping(mapping);
+      setImportStep(2);
+    };
+    reader.readAsText(file);
+  };
+
+  // Submit mapping and get preview validation from server
+  const handleColumnMappingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setImportError("");
+    setIsImporting(true);
+
+    const nameIdx = csvHeaders.indexOf(columnMapping.customer_name);
+    const phoneIdx = csvHeaders.indexOf(columnMapping.customer_phone);
+    const addrIdx = csvHeaders.indexOf(columnMapping.customer_address);
+    const codIdx = csvHeaders.indexOf(columnMapping.amount_cod);
+
+    if (nameIdx === -1 || phoneIdx === -1 || addrIdx === -1 || codIdx === -1) {
+      setImportError("All fields must be mapped to proceed.");
+      setIsImporting(false);
+      return;
+    }
+
+    const payloadRows = csvRows.map(row => ({
+      customer_name: row[nameIdx]?.trim() || "",
+      customer_phone: row[phoneIdx]?.trim() || "",
+      customer_address: row[addrIdx]?.trim() || "",
+      amount_cod: row[codIdx]?.trim() || ""
+    }));
+
+    try {
+      const xsrfToken = getCookie("XSRF-TOKEN");
+      const res = await fetch(getApiUrl("/api/orders/import/preview"), {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {})
+        },
+        body: JSON.stringify({ rows: payloadRows }),
+        credentials: "include"
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setPreviewData(data);
+        setImportStep(3);
+      } else {
+        const data = await res.json();
+        setImportError(data.error || "Failed to process mapping preview.");
+      }
+    } catch (err) {
+      setImportError("Network error validating CSV rows.");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Perform the actual database import
+  const handleImportConfirm = async () => {
+    setImportError("");
+    setIsImporting(true);
+
+    if (previewData.valid_rows.length === 0) {
+      setImportError("There are no valid orders to import.");
+      setIsImporting(false);
+      return;
+    }
+
+    try {
+      const xsrfToken = getCookie("XSRF-TOKEN");
+      const res = await fetch(getApiUrl("/api/orders/import/confirm"), {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {})
+        },
+        body: JSON.stringify({ rows: previewData.valid_rows }),
+        credentials: "include"
+      });
+
+      if (res.ok) {
+        setImportStep(4);
+        fetchOrders(); // Refresh table
+      } else {
+        const data = await res.json();
+        setImportError(data.error || "Failed to complete import process.");
+      }
+    } catch (err) {
+      setImportError("Network error confirming import.");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   useEffect(() => {
     fetchUserRole();
     fetchDashboardStats();
@@ -169,7 +486,7 @@ export default function Orders() {
 
   useEffect(() => {
     fetchOrders();
-  }, [userRole, activeTab, search, statusFilter, currentPage]);
+  }, [userRole, activeTab, search, statusFilter, cityFilter, merchantFilter, driverFilter, currentPage]);
 
   // Create Order Handler
   const handleCreateOrder = async (e: React.FormEvent) => {
@@ -261,6 +578,55 @@ export default function Orders() {
     }
   };
 
+  // Reassign Driver (Admin action)
+  const handleReassignDriver = async (orderId: number, driverId: number) => {
+    try {
+      const xsrfToken = getCookie("XSRF-TOKEN");
+      const res = await fetch(getApiUrl(`/api/admin/orders/${orderId}/reassign`), {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {})
+        },
+        body: JSON.stringify({ livreur_id: driverId }),
+        credentials: "include"
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        fetchOrders();
+        fetchDashboardStats();
+        setSelectedOrder(prev => prev ? { ...prev, status: "in_transit", livreur: data.order.livreur } : null);
+      }
+    } catch (err) {
+      console.error("Error reassigning driver:", err);
+    }
+  };
+
+  // Cancel Order (Admin action)
+  const handleCancelOrder = async (orderId: number) => {
+    try {
+      const xsrfToken = getCookie("XSRF-TOKEN");
+      const res = await fetch(getApiUrl(`/api/admin/orders/${orderId}/cancel`), {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {})
+        },
+        credentials: "include"
+      });
+
+      if (res.ok) {
+        fetchOrders();
+        fetchDashboardStats();
+        setSelectedOrder(prev => prev ? { ...prev, status: "canceled" } : null);
+      }
+    } catch (err) {
+      console.error("Error cancelling order:", err);
+    }
+  };
+
   return (
     <div className="p-8 space-y-6 max-w-7xl mx-auto">
       
@@ -274,7 +640,23 @@ export default function Orders() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 bg-[#1A1D20] hover:bg-zinc-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm">
+          {userRole === "merchant" && (
+            <button 
+              onClick={() => {
+                setImportStep(1);
+                setImportError("");
+                setIsImportModalOpen(true);
+              }}
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Import CSV
+            </button>
+          )}
+          <button 
+            onClick={handleExportCSV}
+            className="flex items-center gap-2 bg-[#1A1D20] hover:bg-zinc-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+          >
             <Download className="w-4 h-4" />
             Export Data
           </button>
@@ -432,6 +814,72 @@ export default function Orders() {
           </div>
         </div>
 
+        {userRole === "admin" && (
+          <div className="px-6 py-4 bg-gray-50/50 border-b border-gray-100/60 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            {/* City Filter */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">City Coverage</label>
+              <select
+                value={cityFilter}
+                onChange={(e) => { setCityFilter(e.target.value); setCurrentPage(1); }}
+                className="w-full bg-white border border-gray-100 rounded-xl px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                <option value="All">All Cities</option>
+                {CITIES.map(city => (
+                  <option key={city} value={city}>{city}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Merchant Filter */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Merchant Partner</label>
+              <select
+                value={merchantFilter}
+                onChange={(e) => { setMerchantFilter(e.target.value); setCurrentPage(1); }}
+                className="w-full bg-white border border-gray-100 rounded-xl px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                <option value="All">All Merchants</option>
+                {merchantsList.map(merchant => (
+                  <option key={merchant.id} value={merchant.id}>{merchant.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Driver Filter */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Allocated Driver</label>
+              <select
+                value={driverFilter}
+                onChange={(e) => { setDriverFilter(e.target.value); setCurrentPage(1); }}
+                className="w-full bg-white border border-gray-100 rounded-xl px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                <option value="All">All Drivers</option>
+                {driversList.map(driver => (
+                  <option key={driver.id} value={driver.id}>{driver.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Status Dropdown */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Order Status</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+                className="w-full bg-white border border-gray-100 rounded-xl px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                <option value="All">All Statuses</option>
+                <option value="pending">Pending Dispatch</option>
+                <option value="in_transit">Out for Delivery</option>
+                <option value="delivered">Delivered</option>
+                <option value="refused">Returns (RTO)</option>
+                <option value="canceled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+        )}
+
         {/* Orders Table */}
         <div className="overflow-x-auto">
           {isLoading ? (
@@ -469,7 +917,10 @@ export default function Orders() {
                       {/* Order & Date */}
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-brand-500 text-sm hover:underline cursor-pointer">
+                          <span 
+                            onClick={() => setSelectedOrder(order)}
+                            className="font-extrabold text-brand-500 text-sm hover:underline cursor-pointer"
+                          >
                             {order.tracking_number}
                           </span>
                         </div>
@@ -685,6 +1136,405 @@ export default function Orders() {
                 {isSubmitting ? "Creating Order..." : "Create Order"}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CSV Bulk Import Modal */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[28px] border border-gray-100 shadow-2xl p-8 max-w-lg w-full relative space-y-6">
+            <button 
+              onClick={() => setIsImportModalOpen(false)}
+              className="absolute right-6 top-6 text-gray-400 hover:text-gray-900 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="space-y-1">
+              <h3 className="text-xl font-black text-gray-900 tracking-tight">Bulk Import Orders</h3>
+              <p className="text-xs font-semibold text-gray-500">Upload a CSV file to import multiple shipments at once.</p>
+            </div>
+
+            {/* Steps indicator */}
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+              {[
+                { step: 1, label: "Upload File" },
+                { step: 2, label: "Map Columns" },
+                { step: 3, label: "Preview & Validate" },
+                { step: 4, label: "Import Complete" }
+              ].map((s) => (
+                <div key={s.step} className="flex items-center gap-2">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${
+                    importStep === s.step 
+                      ? "bg-brand-500 text-white shadow-sm" 
+                      : importStep > s.step 
+                        ? "bg-emerald-500 text-white" 
+                        : "bg-gray-100 text-gray-400"
+                  }`}>
+                    {s.step}
+                  </div>
+                  <span className={`text-[10px] font-bold hidden sm:inline ${
+                    importStep === s.step ? "text-gray-900" : "text-gray-400"
+                  }`}>
+                    {s.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {importError && (
+              <div className="bg-red-50 text-red-600 text-xs font-semibold px-4 py-3 rounded-xl border border-red-100 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{importError}</span>
+              </div>
+            )}
+
+            {/* STEP 1: Upload File */}
+            {importStep === 1 && (
+              <div className="space-y-5">
+                <div className="border-2 border-dashed border-gray-200 rounded-2xl p-8 flex flex-col items-center justify-center space-y-4 hover:border-brand-500 transition-colors">
+                  <div className="w-12 h-12 rounded-full bg-brand-50 flex items-center justify-center text-brand-500">
+                    <Sliders className="w-6 h-6 rotate-90" />
+                  </div>
+                  <div className="text-center space-y-1">
+                    <p className="text-sm font-bold text-gray-700">Select a CSV document</p>
+                    <p className="text-xs text-gray-400">Supported formats: .csv (comma-separated value)</p>
+                  </div>
+                  <label className="bg-[#1A1D20] hover:bg-zinc-800 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer">
+                    Browse Files
+                    <input 
+                      type="file" 
+                      accept=".csv" 
+                      onChange={handleCSVFileChange} 
+                      className="hidden" 
+                    />
+                  </label>
+                </div>
+
+                <div className="bg-gray-50 rounded-2xl p-4 flex items-center justify-between border border-gray-100">
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-bold text-gray-800">Need a sample template?</p>
+                    <p className="text-[10px] text-gray-400 font-medium">Download the standard CSV template schema.</p>
+                  </div>
+                  <a 
+                    href={getApiUrl("/api/orders/import/template")} 
+                    download
+                    className="flex items-center gap-1.5 border border-gray-200 hover:bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Template
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 2: Map Columns */}
+            {importStep === 2 && (
+              <form onSubmit={handleColumnMappingSubmit} className="space-y-4">
+                <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                  {[
+                    { key: "customer_name", label: "Customer Name" },
+                    { key: "customer_phone", label: "Customer Phone" },
+                    { key: "customer_address", label: "Customer Address" },
+                    { key: "amount_cod", label: "COD Amount (MAD)" }
+                  ].map((field) => (
+                    <div key={field.key} className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">
+                        {field.label}
+                      </label>
+                      <select
+                        value={columnMapping[field.key as keyof typeof columnMapping]}
+                        onChange={(e) => setColumnMapping({
+                          ...columnMapping,
+                          [field.key]: e.target.value
+                        })}
+                        required
+                        className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-xs focus:outline-none w-full font-bold text-gray-950 focus:border-brand-500"
+                      >
+                        <option value="">-- Choose CSV Column --</option>
+                        {csvHeaders.map(h => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="pt-2 flex items-center justify-between gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setImportStep(1)}
+                    className="w-1/2 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl py-3 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Back to Upload
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isImporting}
+                    className="w-1/2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl py-3 text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {isImporting ? "Processing..." : "Next: Preview Rows"}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* STEP 3: Preview & Validate */}
+            {importStep === 3 && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100/50 text-center">
+                    <p className="text-xl font-black text-emerald-600">{previewData.valid_count}</p>
+                    <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-wider mt-0.5">Valid Shipments</p>
+                  </div>
+                  <div className="bg-red-50 rounded-2xl p-4 border border-red-100/50 text-center">
+                    <p className="text-xl font-black text-red-500">{previewData.invalid_count}</p>
+                    <p className="text-[10px] text-red-400 font-bold uppercase tracking-wider mt-0.5">Validation Errors</p>
+                  </div>
+                </div>
+
+                {previewData.invalid_count > 0 && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-red-500 uppercase tracking-widest block">
+                      Validation Issues Detected
+                    </label>
+                    <div className="max-h-40 overflow-y-auto border border-red-100 rounded-xl p-3 bg-red-50/20 space-y-2 divide-y divide-red-100/50">
+                      {previewData.invalid_rows.map((row) => (
+                        <div key={row.index} className="text-[10px] font-medium pt-2 first:pt-0">
+                          <span className="font-bold text-red-600">Row {row.index + 2}: </span>
+                          <span className="text-gray-500">"{row.data.customer_name || 'Empty'}" - </span>
+                          <span className="text-red-500">{row.errors.join(", ")}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-2 flex items-center justify-between gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setImportStep(2)}
+                    className="w-1/2 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl py-3 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Back to Mapping
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleImportConfirm}
+                    disabled={isImporting || previewData.valid_count === 0}
+                    className="w-1/2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl py-3 text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {isImporting ? "Importing..." : `Import ${previewData.valid_count} Valid Orders`}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 4: Success / Done */}
+            {importStep === 4 && (
+              <div className="text-center py-6 space-y-5">
+                <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center mx-auto shadow-sm">
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-lg font-black text-gray-900">Import Process Complete!</h4>
+                  <p className="text-xs font-semibold text-gray-500">
+                    Your {previewData.valid_count} valid shipments have been added to the queue.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsImportModalOpen(false)}
+                  className="w-full bg-[#1A1D20] hover:bg-zinc-800 text-white rounded-xl py-3 text-xs font-bold transition-all cursor-pointer"
+                >
+                  Return to Dashboard
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Order Details Drawer Modal */}
+      {selectedOrder && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[28px] border border-gray-100 shadow-2xl p-8 max-w-md w-full relative space-y-6">
+            <button 
+              onClick={() => setSelectedOrder(null)}
+              className="absolute right-6 top-6 text-gray-400 hover:text-gray-900 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="space-y-1">
+              <span className="text-[10px] font-black text-brand-500 uppercase tracking-widest">Shipment Details</span>
+              <h3 className="text-xl font-black text-gray-900 tracking-tight">{selectedOrder.tracking_number}</h3>
+              <p className="text-[10px] text-gray-400 font-bold">Created on {new Date(selectedOrder.created_at).toLocaleString()}</p>
+            </div>
+
+            {/* Status Timeline */}
+            <div className="space-y-4 bg-gray-50/50 p-4 rounded-2xl border border-gray-100/50">
+              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Delivery Lifecycle</h4>
+              <div className="space-y-4 relative pl-5">
+                <div className="absolute left-[7px] top-1.5 bottom-1.5 w-0.5 bg-gray-200"></div>
+
+                {/* Event 1: Created */}
+                <div className="relative flex gap-3 items-start">
+                  <span className="absolute -left-5 w-3.5 h-3.5 rounded-full border-2 border-white bg-green-500 shadow-sm mt-0.5 animate-pulse"></span>
+                  <div>
+                    <h5 className="text-xs font-extrabold text-gray-900">Shipment Created</h5>
+                    <p className="text-[10px] text-gray-400 font-semibold">Registered by Merchant</p>
+                  </div>
+                </div>
+
+                {/* Event 2: Claimed */}
+                <div className="relative flex gap-3 items-start">
+                  <span className={`absolute -left-5 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm mt-0.5 ${
+                    selectedOrder.livreur || selectedOrder.status !== "pending" ? "bg-green-500" : "bg-gray-200"
+                  }`}></span>
+                  <div>
+                    <h5 className="text-xs font-extrabold text-gray-900">Courier Allocated</h5>
+                    <p className="text-[10px] text-gray-400 font-semibold">
+                      {selectedOrder.livreur ? `Assigned to ${selectedOrder.livreur.name}` : "Awaiting driver claiming"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Event 3: Out for Delivery */}
+                <div className="relative flex gap-3 items-start">
+                  <span className={`absolute -left-5 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm mt-0.5 ${
+                    selectedOrder.status === "in_transit" || selectedOrder.status === "delivered" ? "bg-green-500" : "bg-gray-200"
+                  }`}></span>
+                  <div>
+                    <h5 className="text-xs font-extrabold text-gray-900">Out for Delivery</h5>
+                    <p className="text-[10px] text-gray-400 font-semibold">Courier dispatched to client address</p>
+                  </div>
+                </div>
+
+                {/* Event 4: Delivered or Canceled */}
+                <div className="relative flex gap-3 items-start">
+                  <span className={`absolute -left-5 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm mt-0.5 ${
+                    selectedOrder.status === "delivered" ? "bg-green-500" :
+                    selectedOrder.status === "refused" || selectedOrder.status === "canceled" ? "bg-red-500" : "bg-gray-200"
+                  }`}></span>
+                  <div>
+                    <h5 className="text-xs font-extrabold text-gray-900">
+                      {selectedOrder.status === "delivered" ? "Successfully Delivered" :
+                       selectedOrder.status === "refused" ? "Refused (Returned)" :
+                       selectedOrder.status === "canceled" ? "Cancelled" : "Delivery Status"}
+                    </h5>
+                    <p className="text-[10px] text-gray-400 font-semibold">Status confirmed by courier agent</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Customer Details */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Recipient Details</h4>
+              <div className="space-y-2 text-xs font-semibold text-gray-700">
+                <div className="flex justify-between border-b border-gray-50 pb-2">
+                  <span className="text-gray-400">Client Name</span>
+                  <span className="text-gray-900 font-bold">{selectedOrder.customer_name}</span>
+                </div>
+                <div className="flex justify-between border-b border-gray-50 pb-2">
+                  <span className="text-gray-400">Phone Number</span>
+                  <span className="text-gray-900 font-bold">{selectedOrder.customer_phone}</span>
+                </div>
+                <div className="flex justify-between border-b border-gray-50 pb-2">
+                  <span className="text-gray-400">Shipping Address</span>
+                  <span className="text-gray-900 font-bold text-right max-w-[200px]">{selectedOrder.customer_address}</span>
+                </div>
+                <div className="flex justify-between pt-1">
+                  <span className="text-gray-400">Cash COD Value</span>
+                  <span className="text-brand-500 font-black text-sm">{selectedOrder.amount_cod.toLocaleString()} MAD</span>
+                </div>
+              </div>
+            </div>
+
+            {userRole === "admin" && selectedOrder.merchant && (
+              <div className="space-y-3 pt-3 border-t border-gray-100">
+                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Merchant Details</h4>
+                <div className="space-y-2 text-xs font-semibold text-gray-700">
+                  <div className="flex justify-between border-b border-gray-50 pb-2">
+                    <span className="text-gray-400">Business Name</span>
+                    <span className="text-gray-900 font-bold">{selectedOrder.merchant.name}</span>
+                  </div>
+                  <div className="flex justify-between pb-2">
+                    <span className="text-gray-400">Email Address</span>
+                    <span className="text-gray-900 font-bold">{selectedOrder.merchant.email}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {userRole === "admin" && (
+              <div className="space-y-3 pt-3 border-t border-gray-100">
+                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Courier Assignment</h4>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-400">Assigned Driver</span>
+                    <span className="text-xs font-bold text-gray-900">
+                      {selectedOrder.livreur ? selectedOrder.livreur.name : "Unassigned"}
+                    </span>
+                  </div>
+                  <select
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        handleReassignDriver(selectedOrder.id, Number(e.target.value));
+                      }
+                    }}
+                    value={selectedOrder.livreur_id || ""}
+                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-xs focus:outline-none font-bold text-gray-900 focus:border-brand-500"
+                  >
+                    <option value="">-- Reassign Driver --</option>
+                    {driversList.map((driver) => (
+                      <option key={driver.id} value={driver.id}>
+                        {driver.name} ({driver.status})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {userRole === "admin" && (
+              <div className="space-y-3 pt-3 border-t border-gray-100">
+                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Internal Admin Notes</h4>
+                <div className="space-y-2">
+                  <textarea
+                    value={internalNote}
+                    onChange={(e) => setInternalNote(e.target.value)}
+                    placeholder="Add internal notes about payment, delivery instructions, issues..."
+                    rows={3}
+                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-500 placeholder-gray-400"
+                  />
+                  <button
+                    onClick={handleSaveInternalNotes}
+                    disabled={savingNote}
+                    className="w-full bg-zinc-950 hover:bg-zinc-900 text-white rounded-xl py-2.5 text-xs font-bold transition-all flex items-center justify-center gap-2"
+                  >
+                    {savingNote ? "Saving Notes..." : "Save Notes"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {userRole === "admin" && selectedOrder.status !== "delivered" && selectedOrder.status !== "canceled" && (
+              <div className="pt-2">
+                <button
+                  onClick={() => {
+                    if (confirm("Are you sure you want to cancel this order?")) {
+                      handleCancelOrder(selectedOrder.id);
+                    }
+                  }}
+                  className="w-full bg-red-50 hover:bg-red-100 text-red-600 rounded-xl py-3 text-xs font-bold transition-all flex items-center justify-center gap-2"
+                >
+                  Cancel Order
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

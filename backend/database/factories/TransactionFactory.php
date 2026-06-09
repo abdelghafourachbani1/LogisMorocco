@@ -13,12 +13,12 @@ class TransactionFactory extends Factory
 {
     public function definition(): array
     {
-        return [
-            'user_id' => User::factory(),
-            'order_id' => Order::factory(),
-            'type' => fake()->randomElement(['collection', 'payout', 'adjustment']),
-            'amount' => fake()->randomFloat(2, 10, 500),
-            'description' => fake()->sentence(),
-        ];
+        // return [
+        //     'user_id' => User::factory(),
+        //     'order_id' => Order::factory(),
+        //     'type' => fake()->randomElement(['collection', 'payout', 'adjustment']),
+        //     'amount' => fake()->randomFloat(2, 10, 500),
+        //     'description' => fake()->sentence(),
+        // ];
     }
 }

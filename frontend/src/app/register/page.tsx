@@ -24,7 +24,7 @@ function getApiUrl(path: string): string {
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [role, setRole] = useState<"merchant" | "livreur" | "admin">("merchant");
+  const [role, setRole] = useState<"merchant" | "livreur">("merchant");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -91,8 +91,15 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen flex w-screen bg-[#FAFAFA]">
-      {/* Left: Dark Panel */}
-      <div className="hidden lg:flex lg:w-[45%] bg-[#1c1c1e] relative overflow-hidden flex-col justify-between p-12">
+      {/* Left: Dark Panel with Background Image */}
+      <div className="hidden lg:flex lg:w-[45%] bg-gray-950 relative overflow-hidden flex-col justify-between p-12">
+        <img
+          src="/register_logistics.png"
+          alt="Tangier Med Port Cargo"
+          className="absolute inset-0 w-full h-full object-cover opacity-60"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-gray-950/90 via-gray-950/40 to-transparent"></div>
+
         <div className="relative z-10 pt-8">
           <Link href="/" className="text-[42px] font-black text-white tracking-tight leading-none mb-4 block">
             LogiMorocco
@@ -154,7 +161,7 @@ export default function RegisterPage() {
 
           <form onSubmit={handleRegister}>
             {/* Role Toggle */}
-            <div className="grid grid-cols-3 gap-3 mb-8">
+            <div className="grid grid-cols-2 gap-3 mb-8">
               <button
                 type="button"
                 onClick={() => setRole("merchant")}
@@ -195,26 +202,6 @@ export default function RegisterPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 011-1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
                 </svg>
                 <span className={`text-[13px] font-bold ${role === "livreur" ? "text-gray-900" : "text-gray-500"}`}>Driver</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setRole("admin")}
-                className={`relative flex flex-col items-center justify-center p-4 rounded-xl border transition-all ${
-                  role === "admin" ? "bg-pink-50/50 border-brand-500" : "bg-white border-gray-200 hover:border-gray-300"
-                }`}
-              >
-                {role === "admin" && (
-                  <div className="absolute top-3 right-3 text-brand-500">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                )}
-                <svg className={`w-6 h-6 mb-2 ${role === "admin" ? "text-gray-900" : "text-gray-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <span className={`text-[13px] font-bold ${role === "admin" ? "text-gray-900" : "text-gray-500"}`}>Admin</span>
               </button>
             </div>
 
