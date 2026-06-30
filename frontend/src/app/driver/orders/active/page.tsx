@@ -23,6 +23,17 @@ function getApiUrl(path: string): string {
   return `${host}${path}`;
 }
 
+function getCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) {
+    const cookieValue = parts.pop()?.split(";").shift();
+    return cookieValue ? decodeURIComponent(cookieValue) : null;
+  }
+  return null;
+}
+
 export default function ActiveDeliveries() {
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,7 +75,8 @@ export default function ActiveDeliveries() {
         method: "POST",
         headers: {
           "Accept": "application/json",
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "X-XSRF-TOKEN": getCookie("XSRF-TOKEN") || ""
         },
         body: JSON.stringify({
           status: actionStatus,
@@ -97,7 +109,8 @@ export default function ActiveDeliveries() {
         method: "POST",
         headers: {
           "Accept": "application/json",
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "X-XSRF-TOKEN": getCookie("XSRF-TOKEN") || ""
         },
         body: JSON.stringify({ status: targetStatus }),
         credentials: "include"
@@ -164,11 +177,17 @@ export default function ActiveDeliveries() {
                 </div>
                 <div className="space-y-1">
                   <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Merchant Store</span>
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700">
-                    <Store className="w-4 h-4 text-gray-400" />
-                    <span>{order.merchant?.name || "Merchant"}</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700">
+                      <Store className="w-4 h-4 text-gray-400" />
+                      <span>{order.merchant?.name || "Merchant"}</span>
+                    </div>
+                    {order.merchant?.phone && (
+                      <a href={`tel:${order.merchant.phone}`} className="text-[10px] font-bold text-orange-500 flex items-center gap-1 bg-orange-50 px-2 py-1 rounded-lg hover:bg-orange-100 transition-colors">
+                        <Phone className="w-3 h-3" /> Call
+                      </a>
+                    )}
                   </div>
-                  <span className="text-[10px] text-gray-400 block font-semibold">{order.merchant?.phone}</span>
                 </div>
               </div>
 
@@ -176,13 +195,25 @@ export default function ActiveDeliveries() {
               <div className="space-y-3">
                 <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Customer Info & Destination</span>
                 <div className="space-y-2">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-gray-800">
-                    <User className="w-4 h-4 text-gray-400" />
-                    <span>{order.customer_name}</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-gray-800">
+                      <User className="w-4 h-4 text-gray-400" />
+                      <span>{order.customer_name}</span>
+                    </div>
+                    {order.customer_phone && (
+                      <a href={`tel:${order.customer_phone}`} className="text-[10px] font-bold text-orange-500 flex items-center gap-1 bg-orange-50 px-2 py-1 rounded-lg hover:bg-orange-100 transition-colors">
+                        <Phone className="w-3 h-3" /> Call
+                      </a>
+                    )}
                   </div>
-                  <div className="flex items-start gap-1.5 text-xs text-gray-500 font-semibold leading-relaxed">
-                    <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                    <span>{order.customer_address}</span>
+                  <div className="flex items-start justify-between gap-1.5">
+                    <div className="flex items-start gap-1.5 text-xs text-gray-500 font-semibold leading-relaxed">
+                      <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                      <span>{order.customer_address}</span>
+                    </div>
+                    <a href={`https://maps.google.com/?q=${encodeURIComponent(order.customer_address)}`} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-blue-500 flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-lg flex-shrink-0 hover:bg-blue-100 transition-colors">
+                      <MapPin className="w-3 h-3" /> Maps
+                    </a>
                   </div>
                 </div>
               </div>
@@ -266,6 +297,7 @@ export default function ActiveDeliveries() {
                   className="w-full border border-gray-200 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 bg-white"
                 >
                   <option value="delivered">Delivered Successfully</option>
+                  <option value="postponed">Postponed (Reporté)</option>
                   <option value="failed">Delivery Failed</option>
                   <option value="unreachable">Customer Unreachable</option>
                   <option value="refused">Customer Refused Package</option>
@@ -287,6 +319,19 @@ export default function ActiveDeliveries() {
                     <option value="cancelled_by_customer">Customer cancelled order at door</option>
                     <option value="damaged_package">Package damaged during transit</option>
                   </select>
+                </div>
+              )}
+
+              {actionStatus === "postponed" && (
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Reason for Postponement</label>
+                    <input type="text" placeholder="e.g. Customer asked to deliver tomorrow" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 bg-white" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">New Date</label>
+                    <input type="date" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 bg-white" />
+                  </div>
                 </div>
               )}
 

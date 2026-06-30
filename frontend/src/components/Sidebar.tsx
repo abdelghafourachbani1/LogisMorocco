@@ -95,63 +95,103 @@ export default function Sidebar() {
           </div>
 
           {/* Navigation Menu for Driver */}
-          <div className="p-4 space-y-5">
-            {/* Group 1: Overview */}
+          <div className="p-4 space-y-4">
+            
+            <Link href="/driver/dashboard" className={getLinkClass("/driver/dashboard")}>
+              <Layout className="w-4 h-4" />
+              Dashboard
+            </Link>
+
             <div className="space-y-1">
-              <span className="px-4 text-[9px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Overview</span>
-              <Link href="/driver/dashboard" className={getLinkClass("/driver/dashboard")}>
-                <Layout className="w-4 h-4" />
-                Dashboard
-              </Link>
+              <div className="flex items-center gap-2 px-4 py-1">
+                <ShoppingBag className="w-4 h-4 text-gray-400" />
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Orders</span>
+              </div>
+              <div className="pl-3 space-y-0.5 border-l border-gray-150 ml-6">
+                <Link href="/driver/orders/available" className={getSubLinkClass("/driver/orders/available")}>
+                  Available Orders
+                </Link>
+                <Link href="/driver/orders/active" className={getSubLinkClass("/driver/orders/active")}>
+                  Active Deliveries
+                </Link>
+                <Link href="/driver/orders/details" className={getSubLinkClass("/driver/orders/details")}>
+                  Delivery Details
+                </Link>
+                <Link href="/driver/orders/history" className={getSubLinkClass("/driver/orders/history")}>
+                  Delivery History
+                </Link>
+              </div>
             </div>
 
-            {/* Group 2: Deliveries */}
+            <Link href="/driver/tracking" className={getLinkClass("/driver/tracking")}>
+              <Truck className="w-4 h-4" />
+              Tracking
+            </Link>
+
             <div className="space-y-1">
-              <span className="px-4 text-[9px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Deliveries</span>
-              <Link href="/driver/orders/available" className={getLinkClass("/driver/orders/available")}>
-                <Layers className="w-4 h-4" />
-                Available Orders
-              </Link>
-              <Link href="/driver/orders/active" className={getLinkClass("/driver/orders/active")}>
-                <ShoppingBag className="w-4 h-4" />
-                Active Deliveries
-              </Link>
-              <Link href="/driver/orders/history" className={getLinkClass("/driver/orders/history")}>
-                <FileText className="w-4 h-4" />
-                Delivery History
-              </Link>
+              <div className="flex items-center gap-2 px-4 py-1">
+                <CreditCard className="w-4 h-4 text-gray-400" />
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Earnings</span>
+              </div>
+              <div className="pl-3 space-y-0.5 border-l border-gray-150 ml-6">
+                <Link href="/driver/wallet" className={getSubLinkClass("/driver/wallet")}>
+                  Wallet
+                </Link>
+                <Link href="/driver/transactions" className={getSubLinkClass("/driver/transactions")}>
+                  Transactions
+                </Link>
+                <Link href="/driver/withdrawals" className={getSubLinkClass("/driver/withdrawals")}>
+                  Withdrawals
+                </Link>
+              </div>
             </div>
 
-            {/* Group 3: Finance & Performance */}
             <div className="space-y-1">
-              <span className="px-4 text-[9px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Finance & Stats</span>
-              <Link href="/driver/wallet" className={getLinkClass("/driver/wallet")}>
-                <CreditCard className="w-4 h-4" />
-                Wallet & Earnings
-              </Link>
-              <Link href="/driver/performance" className={getLinkClass("/driver/performance")}>
-                <BarChart3 className="w-4 h-4" />
-                Performance Metrics
-              </Link>
+              <div className="flex items-center gap-2 px-4 py-1">
+                <BarChart3 className="w-4 h-4 text-gray-400" />
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Performance</span>
+              </div>
+              <div className="pl-3 space-y-0.5 border-l border-gray-150 ml-6">
+                <Link href="/driver/performance/statistics" className={getSubLinkClass("/driver/performance/statistics")}>
+                  Statistics
+                </Link>
+                <Link href="/driver/performance/ratings" className={getSubLinkClass("/driver/performance/ratings")}>
+                  Ratings
+                </Link>
+              </div>
             </div>
 
-            {/* Group 4: Support */}
+            <Link href="/driver/notifications" className={getLinkClass("/driver/notifications")}>
+              <Bell className="w-4 h-4" />
+              Notifications
+            </Link>
+
+            <Link href="/driver/support" className={getLinkClass("/driver/support")}>
+              <HelpCircle className="w-4 h-4" />
+              Support
+            </Link>
+
             <div className="space-y-1">
-              <span className="px-4 text-[9px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Support</span>
-              <Link href="/driver/support" className={getLinkClass("/driver/support")}>
-                <HelpCircle className="w-4 h-4" />
-                Help & Support
-              </Link>
+              <div className="flex items-center gap-2 px-4 py-1">
+                <Settings className="w-4 h-4 text-gray-400" />
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Settings</span>
+              </div>
+              <div className="pl-3 space-y-0.5 border-l border-gray-150 ml-6">
+                <Link href="/driver/settings/profile" className={getSubLinkClass("/driver/settings/profile")}>
+                  Profile
+                </Link>
+                <Link href="/driver/settings/vehicle" className={getSubLinkClass("/driver/settings/vehicle")}>
+                  Vehicle Information
+                </Link>
+                <Link href="/driver/settings/availability" className={getSubLinkClass("/driver/settings/availability")}>
+                  Availability
+                </Link>
+                <Link href="/driver/settings/security" className={getSubLinkClass("/driver/settings/security")}>
+                  Security
+                </Link>
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Bottom Sidebar: Settings */}
-        <div className="p-4 border-t border-gray-50 bg-gray-50/30">
-          <Link href="/driver/settings" className={getLinkClass("/driver/settings")}>
-            <Settings className="w-4 h-4" />
-            Driver Settings
-          </Link>
         </div>
       </aside>
     );

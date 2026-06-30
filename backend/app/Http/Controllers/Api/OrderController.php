@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\Product;
 use App\Events\OrderStatusUpdated;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +16,7 @@ class OrderController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $query = Order::query()->with(['merchant', 'livreur']);
+        $query = Order::query()->with(['merchant', 'livreur', 'product']);
 
         // 1. Filter based on user role
         if ($user->role === 'merchant') {
@@ -78,31 +79,59 @@ class OrderController extends Controller
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'customer_name' => 'required|string|max:255',
-            'customer_phone' => 'required|string|max:255',
-            'customer_address' => 'required|string',
-            'amount_cod' => 'required|numeric|min:0',
-        ]);
-
         $merchant = $request->user();
 
         if ($merchant->role !== 'merchant') {
             return response()->json(['error' => 'Only merchants can create orders.'], 403);
         }
 
-        $order = $merchant->ordersAsMerchant()->create([
-            'tracking_number' => 'LOG-' . strtoupper(Str::random(8)),
-            'customer_name' => $validated['customer_name'],
-            'customer_phone' => $validated['customer_phone'],
-            'customer_address' => $validated['customer_address'],
-            'amount_cod' => $validated['amount_cod'],
-            'status' => 'pending',
+        $validated = $request->validate([
+            'customer_name' => 'required|string|max:255',
+            'customer_phone' => 'required|string|max:255',
+            'customer_address' => 'required|string',
+            'amount_cod' => 'required|numeric|min:0',
+            'city' => 'nullable|string|max:255',
+            'product_id' => 'nullable|exists:products,id',
+            'quantity' => 'nullable|integer|min:1',
+            'delivery_notes' => 'nullable|string',
         ]);
+
+        $productId = $validated['product_id'] ?? null;
+        $quantity = $validated['quantity'] ?? 1;
+
+        if ($productId) {
+            $product = Product::where('merchant_id', $merchant->id)->find($productId);
+            if (!$product) {
+                return response()->json(['error' => 'Selected product not found.'], 404);
+            }
+            if ($product->quantity < $quantity) {
+                return response()->json(['error' => 'Insufficient stock for this product. Available stock: ' . $product->quantity], 422);
+            }
+        }
+
+        $order = DB::transaction(function() use ($merchant, $validated, $productId, $quantity) {
+            if ($productId) {
+                $product = Product::find($productId);
+                $product->decrement('quantity', $quantity);
+            }
+
+            return $merchant->ordersAsMerchant()->create([
+                'tracking_number' => 'LOG-' . strtoupper(Str::random(8)),
+                'customer_name' => $validated['customer_name'],
+                'customer_phone' => $validated['customer_phone'],
+                'customer_address' => $validated['customer_address'],
+                'amount_cod' => $validated['amount_cod'],
+                'city' => $validated['city'] ?? null,
+                'product_id' => $productId,
+                'quantity' => $quantity,
+                'delivery_notes' => $validated['delivery_notes'] ?? null,
+                'status' => 'pending',
+            ]);
+        });
 
         return response()->json([
             'message' => 'Order created successfully.',
-            'order' => $order
+            'order' => $order->load('product')
         ], 201);
     }
 

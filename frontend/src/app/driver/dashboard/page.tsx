@@ -30,6 +30,8 @@ export default function DriverDashboard() {
     active_deliveries: 0,
     completed_deliveries: 0,
     failed_deliveries: 0,
+    success_rate: 100,
+    today_earnings: 0,
     monthly_earnings: 0,
     pending_earnings: 0,
     rating: 5.0,
@@ -48,7 +50,7 @@ export default function DriverDashboard() {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.stats) setStats(data.stats);
+        if (data.stats) setStats({ ...stats, ...data.stats });
         if (data.recent_orders) setRecentOrders(data.recent_orders);
       }
     } catch (err) {
@@ -84,49 +86,93 @@ export default function DriverDashboard() {
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards (8 metrics) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Today's Deliveries */}
+        {/* Deliveries Today */}
         <div className="bg-white border border-gray-100 p-5 rounded-2xl shadow-sm flex items-center gap-4 hover:shadow-md transition-all duration-300">
           <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center text-orange-500 flex-shrink-0">
             <Truck className="w-6 h-6" />
           </div>
           <div>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Completed Today</span>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Deliveries Today</span>
             <span className="text-xl font-extrabold text-gray-900 block mt-0.5">{stats.today_deliveries}</span>
           </div>
         </div>
 
         {/* Active Deliveries */}
         <div className="bg-white border border-gray-100 p-5 rounded-2xl shadow-sm flex items-center gap-4 hover:shadow-md transition-all duration-300">
-          <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-500 flex-shrink-0">
+          <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 flex-shrink-0">
             <Clock className="w-6 h-6" />
           </div>
           <div>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Active Queue</span>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Active Deliveries</span>
             <span className="text-xl font-extrabold text-gray-900 block mt-0.5">{stats.active_deliveries}</span>
+          </div>
+        </div>
+
+        {/* Delivered Orders */}
+        <div className="bg-white border border-gray-100 p-5 rounded-2xl shadow-sm flex items-center gap-4 hover:shadow-md transition-all duration-300">
+          <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center text-green-500 flex-shrink-0">
+            <CheckCircle2 className="w-6 h-6" />
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Delivered Orders</span>
+            <span className="text-xl font-extrabold text-gray-900 block mt-0.5">{stats.completed_deliveries}</span>
+          </div>
+        </div>
+
+        {/* Failed Deliveries */}
+        <div className="bg-white border border-gray-100 p-5 rounded-2xl shadow-sm flex items-center gap-4 hover:shadow-md transition-all duration-300">
+          <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center text-red-500 flex-shrink-0">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Failed Deliveries</span>
+            <span className="text-xl font-extrabold text-gray-900 block mt-0.5">{stats.failed_deliveries}</span>
+          </div>
+        </div>
+
+        {/* Success Rate */}
+        <div className="bg-white border border-gray-100 p-5 rounded-2xl shadow-sm flex items-center gap-4 hover:shadow-md transition-all duration-300">
+          <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-500 flex-shrink-0">
+            <TrendingUp className="w-6 h-6" />
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Success Rate</span>
+            <span className="text-xl font-extrabold text-gray-900 block mt-0.5">{stats.success_rate || 100}%</span>
+          </div>
+        </div>
+
+        {/* Today's Earnings */}
+        <div className="bg-white border border-gray-100 p-5 rounded-2xl shadow-sm flex items-center gap-4 hover:shadow-md transition-all duration-300">
+          <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-500 flex-shrink-0">
+            <DollarSign className="w-6 h-6" />
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Today's Earnings</span>
+            <span className="text-xl font-extrabold text-gray-900 block mt-0.5">{stats.today_earnings?.toFixed(2) || '0.00'}</span>
           </div>
         </div>
 
         {/* Monthly Earnings */}
         <div className="bg-white border border-gray-100 p-5 rounded-2xl shadow-sm flex items-center gap-4 hover:shadow-md transition-all duration-300">
-          <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center text-green-500 flex-shrink-0">
+          <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-500 flex-shrink-0">
             <DollarSign className="w-6 h-6" />
           </div>
           <div>
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Monthly Earnings</span>
-            <span className="text-xl font-extrabold text-gray-900 block mt-0.5">{stats.monthly_earnings.toFixed(2)} MAD</span>
+            <span className="text-xl font-extrabold text-gray-900 block mt-0.5">{stats.monthly_earnings?.toFixed(2) || '0.00'}</span>
           </div>
         </div>
 
-        {/* Rating Score */}
+        {/* Average Rating */}
         <div className="bg-white border border-gray-100 p-5 rounded-2xl shadow-sm flex items-center gap-4 hover:shadow-md transition-all duration-300">
-          <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 flex-shrink-0">
+          <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-500 flex-shrink-0">
             <Star className="w-6 h-6 fill-current" />
           </div>
           <div>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Driver Score</span>
-            <span className="text-xl font-extrabold text-gray-900 block mt-0.5">{stats.rating.toFixed(1)} / 5.0</span>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Average Rating</span>
+            <span className="text-xl font-extrabold text-gray-900 block mt-0.5">{stats.rating?.toFixed(1) || '5.0'}</span>
           </div>
         </div>
       </div>

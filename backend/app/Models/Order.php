@@ -11,7 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'merchant_id', 'livreur_id', 'tracking_number', 
     'customer_name', 'customer_phone', 'customer_address', 
     'amount_cod', 'status', 'delivery_fee', 'delivery_notes', 
-    'failure_reason', 'status_history', 'admin_notes'
+    'failure_reason', 'status_history', 'admin_notes',
+    'city', 'product_id', 'quantity'
 ])]
 class Order extends Model
 {
@@ -31,5 +32,10 @@ class Order extends Model
     public function livreur(): BelongsTo
     {
         return $this->belongsTo(User::class, 'livreur_id');
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
     }
 }

@@ -38,6 +38,10 @@ class ProductController extends Controller
             'sku' => 'required|string|max:255|unique:products,sku',
             'price' => 'required|numeric|min:0',
             'quantity' => 'required|integer|min:0',
+            'description' => 'nullable|string',
+            'weight' => 'nullable|numeric|min:0',
+            'image_url' => 'nullable|string|max:1000',
+            'status' => 'nullable|string|in:active,inactive',
         ]);
 
         $product = Product::create([
@@ -46,6 +50,10 @@ class ProductController extends Controller
             'sku' => $request->sku,
             'price' => $request->price,
             'quantity' => $request->quantity,
+            'description' => $request->description,
+            'weight' => $request->weight,
+            'image_url' => $request->image_url,
+            'status' => $request->status ?? 'active',
         ]);
 
         return response()->json([
@@ -69,6 +77,10 @@ class ProductController extends Controller
             'sku' => 'required|string|max:255|unique:products,sku,' . $id,
             'price' => 'required|numeric|min:0',
             'quantity' => 'required|integer|min:0',
+            'description' => 'nullable|string',
+            'weight' => 'nullable|numeric|min:0',
+            'image_url' => 'nullable|string|max:1000',
+            'status' => 'nullable|string|in:active,inactive',
         ]);
 
         $product->update([
@@ -76,6 +88,10 @@ class ProductController extends Controller
             'sku' => $request->sku,
             'price' => $request->price,
             'quantity' => $request->quantity,
+            'description' => $request->description,
+            'weight' => $request->weight,
+            'image_url' => $request->image_url,
+            'status' => $request->status ?? $product->status,
         ]);
 
         return response()->json([

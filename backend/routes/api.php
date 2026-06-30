@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\DriverController;
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\PublicApiController;
 
 // Public Auth routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -68,6 +69,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/finance', [FinanceController::class, 'index']);
     Route::post('/finance/payout', [FinanceController::class, 'processPayout']);
     Route::post('/finance/collect', [FinanceController::class, 'processCollection']);
+    Route::post('/finance/withdraw', [FinanceController::class, 'requestWithdrawal']);
 
     // Dashboard Metrics
     Route::get('/dashboard', [DashboardController::class, 'index']);
@@ -96,6 +98,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Merchant Customers
     Route::get('/customers', [CustomerController::class, 'index']);
+    Route::post('/customers/update', [CustomerController::class, 'updateCustomer']);
+
+    // Merchant Complaints
+    Route::get('/complaints', [AdminController::class, 'getMerchantComplaints']);
+    Route::post('/complaints', [AdminController::class, 'createComplaint']);
 
     // Notifications
     Route::get('/notifications', [NotificationController::class, 'index']);
@@ -119,4 +126,33 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/driver/wallet', [DriverController::class, 'wallet']);
     Route::get('/driver/performance', [DriverController::class, 'performance']);
     Route::put('/driver/profile', [DriverController::class, 'updateProfile']);
+});
+
+// ──────────────────────────────────────────────────────────
+// PUBLIC DEVELOPER API — v1
+// Base URL: /api/v1
+// Auth: Authorization: Bearer YOUR_API_KEY
+// Rate limit: 1000 requests per 60 minutes per key
+// ──────────────────────────────────────────────────────────
+
+// Public (no auth) — tracking & cities
+Route::get('/v1/track/{tracking}', [PublicApiController::class, 'trackOrder']);
+Route::get('/v1/cities', [PublicApiController::class, 'cities']);
+
+// Authenticated merchant API
+Route::middleware(['auth:sanctum', 'throttle:1000,60'])->prefix('v1')->group(function () {
+    // Orders
+    Route::get('/orders',            [PublicApiController::class, 'listOrders']);
+    Route::post('/orders',           [PublicApiController::class, 'createOrder']);
+    Route::get('/orders/{id}',       [PublicApiController::class, 'getOrder']);
+    Route::post('/orders/{id}/cancel', [PublicApiController::class, 'cancelOrder']);
+
+    // Products
+    Route::get('/products',          [PublicApiController::class, 'listProducts']);
+    Route::post('/products',         [PublicApiController::class, 'createProduct']);
+    Route::put('/products/{id}',     [PublicApiController::class, 'updateProduct']);
+    Route::delete('/products/{id}',  [PublicApiController::class, 'deleteProduct']);
+
+    // Stats
+    Route::get('/stats',             [PublicApiController::class, 'stats']);
 });

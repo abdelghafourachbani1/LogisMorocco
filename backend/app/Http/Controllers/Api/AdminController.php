@@ -248,6 +248,71 @@ class AdminController extends Controller
         return response()->json(['message' => 'Ticket closed successfully.']);
     }
 
+    public function getMerchantComplaints(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user->role !== 'merchant') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $complaints = DB::table('complaints')
+            ->leftJoin('orders', 'complaints.order_id', '=', 'orders.id')
+            ->where('complaints.user_id', $user->id)
+            ->select('complaints.*', 'orders.tracking_number')
+            ->latest('complaints.created_at')
+            ->get()
+            ->map(function($c) {
+                return [
+                    'id' => $c->id,
+                    'order_id' => $c->order_id,
+                    'tracking_number' => $c->tracking_number ?? 'General Query',
+                    'title' => $c->title,
+                    'description' => $c->description,
+                    'status' => $c->status,
+                    'priority' => $c->priority,
+                    'assigned_to' => $c->assigned_to,
+                    'date' => \Carbon\Carbon::parse($c->created_at)->format('Y-m-d H:i')
+                ];
+            });
+
+        return response()->json([
+            'complaints' => $complaints
+        ]);
+    }
+
+    public function createComplaint(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user->role !== 'merchant') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'description' => 'required|string',
+            'priority' => 'required|string|in:low,medium,high',
+            'order_id' => 'nullable|exists:orders,id',
+        ]);
+
+        $id = DB::table('complaints')->insertGetId([
+            'user_id' => $user->id,
+            'order_id' => $request->order_id,
+            'title' => $request->title,
+            'description' => $request->description,
+            'status' => 'open',
+            'priority' => $request->priority,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json([
+            'message' => 'Ticket created successfully.',
+            'id' => $id
+        ], 201);
+    }
+
     /**
      * Notification dispatch
      */

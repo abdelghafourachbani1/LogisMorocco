@@ -214,4 +214,42 @@ class FinanceController extends Controller
             'balance' => floatval($livreur->fresh()->balance)
         ]);
     }
+
+    public function requestWithdrawal(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user->role !== 'merchant') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'amount' => 'required|numeric|min:1',
+        ]);
+
+        $amount = floatval($request->amount);
+
+        if ($amount > $user->balance) {
+            throw ValidationException::withMessages([
+                'amount' => ['Withdrawal amount cannot exceed available balance.'],
+            ]);
+        }
+
+        $transaction = DB::transaction(function () use ($user, $amount) {
+            $user->decrement('balance', $amount);
+
+            return $user->transactions()->create([
+                'type' => 'payout',
+                'amount' => -$amount,
+                'status' => 'pending',
+                'description' => 'Merchant requested COD withdrawal.',
+            ]);
+        });
+
+        return response()->json([
+            'message' => 'Withdrawal request submitted successfully.',
+            'balance' => floatval($user->fresh()->balance),
+            'transaction' => $transaction
+        ], 201);
+    }
 }

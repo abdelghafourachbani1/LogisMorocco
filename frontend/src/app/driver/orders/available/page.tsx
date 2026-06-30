@@ -21,6 +21,17 @@ function getApiUrl(path: string): string {
   return `${host}${path}`;
 }
 
+function getCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) {
+    const cookieValue = parts.pop()?.split(";").shift();
+    return cookieValue ? decodeURIComponent(cookieValue) : null;
+  }
+  return null;
+}
+
 export default function AvailableOrders() {
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,7 +68,8 @@ export default function AvailableOrders() {
         method: "POST",
         headers: {
           "Accept": "application/json",
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "X-XSRF-TOKEN": getCookie("XSRF-TOKEN") || ""
         },
         credentials: "include"
       });

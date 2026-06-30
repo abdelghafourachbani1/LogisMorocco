@@ -81,7 +81,7 @@ export default function HeaderProfile() {
       } catch (err) {
         console.error("Logout request failed:", err);
       }
-      router.push("/login");
+      router.push("/");
     }
     setIsOpen(false);
   };

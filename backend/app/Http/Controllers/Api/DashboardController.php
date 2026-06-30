@@ -149,37 +149,113 @@ class DashboardController extends Controller
 
     private function merchantDashboard(User $merchant)
     {
-        $orders = $merchant->ordersAsMerchant();
+        $orders = Order::where('merchant_id', $merchant->id)->get();
         
         $totalOrders = $orders->count();
-        $totalCod = floatval($orders->where('status', 'delivered')->sum('amount_cod'));
-        $deliveredCount = $orders->where('status', 'delivered')->count();
-        $inTransitCount = $orders->where('status', 'in_transit')->count();
         $pendingCount = $orders->where('status', 'pending')->count();
-        $cancelledCount = $orders->where('status', 'cancelled')->count();
-        $refusedCount = $orders->where('status', 'refused')->count();
-
-        // Pending COD: orders that are in transit
-        $pendingCod = floatval($orders->where('status', 'in_transit')->sum('amount_cod'));
+        $assignedCount = $orders->whereNotNull('livreur_id')->whereNotIn('status', ['delivered', 'canceled', 'refused'])->count();
+        $inTransitCount = $orders->where('status', 'in_transit')->count();
+        $deliveredCount = $orders->where('status', 'delivered')->count();
+        $cancelledCount = $orders->whereIn('status', ['canceled', 'refused'])->count();
 
         // Rates
-        $closedCount = $deliveredCount + $refusedCount + $cancelledCount;
+        $closedCount = $deliveredCount + $cancelledCount;
         $deliverySuccessRate = $closedCount > 0 ? round(($deliveredCount / $closedCount) * 100, 1) : 100.0;
-        $returnRate = $closedCount > 0 ? round(($refusedCount / $closedCount) * 100, 1) : 0.0;
+        $returnRate = $closedCount > 0 ? round(($cancelledCount / $closedCount) * 100, 1) : 0.0;
 
-        $recentOrders = $merchant->ordersAsMerchant()
-            ->latest()
+        $totalRevenue = floatval($orders->where('status', 'delivered')->sum('amount_cod'));
+        $availableCodBalance = floatval($merchant->balance);
+
+        // 1. Orders by Day (Last 7 Days)
+        $ordersByDay = [];
+        $days = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $date = now()->subDays($i)->format('Y-m-d');
+            $dayName = now()->subDays($i)->format('D');
+            $days[] = $dayName;
+            $ordersByDay[] = $orders->filter(function($o) use ($date) {
+                return $o->created_at->format('Y-m-d') === $date;
+            })->count();
+        }
+
+        // 2. Revenue Evolution (Last 6 Months)
+        $revenueEvolution = [];
+        $months = [];
+        for ($i = 5; $i >= 0; $i--) {
+            $monthStart = now()->subMonths($i)->startOfMonth();
+            $monthEnd = now()->subMonths($i)->endOfMonth();
+            $monthName = now()->subMonths($i)->format('M');
+            $months[] = $monthName;
+            $revenueEvolution[] = floatval($orders->filter(function($o) use ($monthStart, $monthEnd) {
+                return $o->status === 'delivered' && $o->created_at->between($monthStart, $monthEnd);
+            })->sum('amount_cod'));
+        }
+
+        // 3. Top-selling products
+        $topProducts = [];
+        if ($totalOrders > 0) {
+            $topProducts = \DB::table('orders')
+                ->where('orders.merchant_id', $merchant->id)
+                ->whereNotNull('orders.product_id')
+                ->join('products', 'orders.product_id', '=', 'products.id')
+                ->select('products.name', \DB::raw('SUM(orders.quantity) as total_quantity'), \DB::raw('SUM(orders.amount_cod) as total_revenue'))
+                ->groupBy('products.name')
+                ->orderByDesc('total_quantity')
+                ->take(5)
+                ->get()
+                ->map(function($p) {
+                    return [
+                        'name' => $p->name,
+                        'quantity' => intval($p->total_quantity),
+                        'revenue' => floatval($p->total_revenue)
+                    ];
+                });
+        }
+
+        // 4. Orders by city
+        $ordersByCity = \DB::table('orders')
+            ->where('merchant_id', $merchant->id)
+            ->whereNotNull('city')
+            ->select('city', \DB::raw('count(*) as count'))
+            ->groupBy('city')
+            ->orderByDesc('count')
             ->take(5)
             ->get()
-            ->map(function($o) {
+            ->map(function($c) {
                 return [
-                    'id' => $o->id,
-                    'tracking_number' => $o->tracking_number,
-                    'customer_name' => $o->customer_name,
-                    'customer_address' => $o->customer_address,
-                    'amount_cod' => floatval($o->amount_cod),
-                    'status' => $o->status,
-                    'date' => $o->created_at->format('M d, Y')
+                    'city' => $c->city,
+                    'count' => intval($c->count)
+                ];
+            });
+
+        // 5. Recent Activity Feed
+        $recentOrders = $orders->sortByDesc('created_at')->take(5)->map(function($o) {
+            return [
+                'id' => $o->id,
+                'tracking_number' => $o->tracking_number,
+                'customer_name' => $o->customer_name,
+                'customer_address' => $o->customer_address,
+                'amount_cod' => floatval($o->amount_cod),
+                'status' => $o->status,
+                'date' => $o->created_at->format('M d, Y')
+            ];
+        })->values();
+
+        // Let's add recent notifications
+        $recentNotifications = \DB::table('notifications')
+            ->where('notifiable_id', $merchant->id)
+            ->where('notifiable_type', 'App\Models\User')
+            ->latest('created_at')
+            ->take(5)
+            ->get()
+            ->map(function($n) {
+                $data = json_decode($n->data, true);
+                return [
+                    'id' => $n->id,
+                    'title' => $data['title'] ?? 'Notification',
+                    'message' => $data['message'] ?? '',
+                    'read_at' => $n->read_at,
+                    'time' => \Carbon\Carbon::parse($n->created_at)->diffForHumans()
                 ];
             });
 
@@ -187,17 +263,26 @@ class DashboardController extends Controller
             'role' => 'merchant',
             'stats' => [
                 'total_orders' => $totalOrders,
-                'total_cod' => $totalCod,
-                'delivered_count' => $deliveredCount,
-                'in_transit_count' => $inTransitCount,
-                'pending_count' => $pendingCount,
-                'cancelled_count' => $cancelledCount,
-                'refused_count' => $refusedCount,
-                'pending_cod' => $pendingCod,
-                'delivery_success_rate' => $deliverySuccessRate,
+                'pending_orders' => $pendingCount,
+                'assigned_orders' => $assignedCount,
+                'in_transit_orders' => $inTransitCount,
+                'delivered_orders' => $deliveredCount,
+                'cancelled_orders' => $cancelledCount,
                 'return_rate' => $returnRate,
+                'delivery_success_rate' => $deliverySuccessRate,
+                'total_revenue' => $totalRevenue,
+                'available_cod_balance' => $availableCodBalance,
             ],
-            'recent_orders' => $recentOrders
+            'charts' => [
+                'days' => $days,
+                'orders_by_day' => $ordersByDay,
+                'months' => $months,
+                'revenue_evolution' => $revenueEvolution,
+                'top_products' => $topProducts,
+                'orders_by_city' => $ordersByCity,
+            ],
+            'recent_orders' => $recentOrders,
+            'recent_notifications' => $recentNotifications
         ]);
     }
 
