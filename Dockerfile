@@ -1,6 +1,5 @@
 # ==========================================
-# LogisMaghreb Backend (Laravel 13 API)
-# Production Dockerfile
+# LogisMaghreb Backend (Root Dockerfile for Railway)
 # ==========================================
 
 FROM php:8.3-fpm-alpine AS base
@@ -26,12 +25,12 @@ COPY --from=composer:2.7 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
-# Copy composer files and install dependencies
-COPY composer.json composer.lock ./
+# Copy composer files from backend directory
+COPY backend/composer.json backend/composer.lock ./
 RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
 
-# Copy application source code
-COPY . .
+# Copy backend application code
+COPY backend/ .
 
 # Complete composer autoloading and run scripts
 RUN composer dump-autoload --optimize --no-dev
@@ -42,8 +41,8 @@ RUN mkdir -p storage/framework/sessions storage/framework/views storage/framewor
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
 # Copy Nginx & Supervisor configuration
-COPY nginx.conf /etc/nginx/http.d/default.conf
-COPY supervisor.conf /etc/supervisor/conf.d/supervisord.conf
+COPY backend/nginx.conf /etc/nginx/http.d/default.conf
+COPY backend/supervisor.conf /etc/supervisor/conf.d/supervisord.conf
 
 EXPOSE 8000
 
